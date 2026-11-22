@@ -11,7 +11,7 @@ room {
 }
 
 android {
-    namespace = "ru.landilf.memeorganaizer"
+    namespace = "ru.landilf.memeorganizer"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "ru.landilf.memeorganaizer"
+        applicationId = "ru.landilf.memeorganizer"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

@@ -1,3 +1,64 @@
 <resources>
-    <string name="app_name">MemeOrganaizer</string>
+    <string name="app_name">Meme Organizer</string>
+
+    <string name="back_button">Назад</string>
+
+    <string name="yes_button">Да</string>
+
+    <string name="no_button">Нет</string>
+
+    <string name="cancel_button">Отмена</string>
+
+    <string name="navigation_albums">Альбомы</string>
+    <string name="navigation_home">Главная</string>
+    <string name="navigation_favorites">Избранное</string>
+
+    <string name="settings_open">Настройки</string>
+    <string name="settings_empty">Настройки появятся позже</string>
+    <string name="settings_theme_components">Посмотреть элементы темы</string>
+
+    <string name="library_add">Добавить мемы</string>
+    <string name="library_import_gallery">Галерея</string>
+    <string name="library_import_files">Файлы</string>
+    <string name="library_add_hint">Нажмите +, чтобы добавить файлы</string>
+    <string name="library_empty">Здесь будут ваши мемы</string>
+
+    <string name="albums_empty">Здесь будут ваши альбомы</string>
+
+    <string name="favorites_empty">Здесь будут избранные мемы</string>
+
+    <string name="import_cancel_confirmation_title">Отменить добавление?</string>
+    <string name="import_cancel_confirmation_message">Выбранные файлы не будут добавлены в библиотеку.</string>
+    <string name="import_remove_confirmation_title">Убрать файл?</string>
+    <string name="import_remove_confirmation_message">Файлы будут убраны из добавления. Исходные файлы останутся на месте.</string>
+    <string name="import_remove">Убрать из добавления</string>
+    <string name="import_select_all">Выбрать все</string>
+    <string name="import_delete">Удалить</string>
+    <string name="import_confirm">Добавить</string>
+    <string name="import_remove_multiple_confirmation_title">Убрать файлы: %1$d?</string>
+    <string name="import_selected_count">Выбрано: %1$d</string>
+    <string name="import_progress">Добавление: %1$d / %2$d</string>
+    <string name="import_summary">Добавлено: %1$d, дубликатов: %2$d, ошибок: %3$d</string>
+    <string name="import_interrupted">Импорт прерван. Успешно добавлено: %1$d</string>
+    <string name="import_file_count">%1$d</string>
+
+    <string name="media_preview_unavailable">Предпросмотр недоступен</string>
+    <string name="media_video_description">Видео</string>
+    <string name="media_viewer_position">%1$d / %2$d</string>
+
+    <string name="video_pause">Пауза</string>
+    <string name="video_play">Воспроизвести</string>
+    <string name="video_position">%1$d:%2$02d</string>
+
+    <string name="theme_preview_dark_theme">Тёмная тема</string>
+    <string name="theme_preview_title">Заголовок</string>
+    <string name="theme_preview_body">Основной текст и описание элементов</string>
+    <string name="theme_preview_primary_button">Основная кнопка</string>
+    <string name="theme_preview_secondary_button">Дополнительная кнопка</string>
+    <string name="theme_preview_text_button">Текстовая кнопка</string>
+    <string name="theme_preview_text_field">Поле ввода</string>
+    <string name="theme_preview_tag">Тег</string>
+    <string name="theme_preview_card">Карточка</string>
+    <string name="theme_preview_card_description">Описание карточки</string>
+    <string name="theme_preview_checkbox">Флажок</string>
 </resources>
