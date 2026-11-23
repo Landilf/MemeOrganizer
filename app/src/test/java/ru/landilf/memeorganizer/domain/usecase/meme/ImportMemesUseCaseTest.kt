@@ -18,7 +18,7 @@ import java.time.Instant
 class ImportMemesUseCaseTest {
     @Test
     fun `reports progress and continues after a duplicate and an expected failure`() = runTest {
-        val meme = Meme("1", "meme.png", MemeMediaType.Image, "image/png", Instant.EPOCH, "hash")
+        val meme = Meme(1L, "meme.png", MemeMediaType.Image, "image/png", Instant.EPOCH, "hash", "file")
         val results = listOf(
             ImportResult.Imported(meme),
             ImportResult.Duplicate(meme),

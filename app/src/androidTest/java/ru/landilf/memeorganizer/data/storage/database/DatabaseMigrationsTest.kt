@@ -1,0 +1,98 @@
+package ru.landilf.memeorganizer.data.storage.database
+
+import android.content.Context
+import androidx.room.Room
+import androidx.room.testing.MigrationTestHelper
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import ru.landilf.memeorganizer.data.storage.entities.meme.MemeEntity
+import ru.landilf.memeorganizer.data.storage.mappers.meme.MemeStorageMapper
+import java.io.File
+import java.util.UUID
+
+@RunWith(AndroidJUnit4::class)
+class DatabaseMigrationsTest {
+    private lateinit var context: Context
+    private lateinit var databaseName: String
+    private val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AppDatabase::class.java)
+
+    @Before
+    fun setUp() {
+        context = ApplicationProvider.getApplicationContext()
+        databaseName = "migration_${UUID.randomUUID()}.db"
+    }
+
+    @After
+    fun tearDown() {
+        context.deleteDatabase(databaseName)
+    }
+
+    @Test
+    fun migratesExistingMemesAndPreservesFileReferences() = runBlocking {
+        val fileName = "migration-${UUID.randomUUID()}"
+        val directory = File(context.filesDir, "memes").apply { mkdirs() }
+        val file = File(directory, fileName).apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        try {
+            helper.createDatabase(databaseName, 1).apply {
+                execSQL(
+                    "INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any>("uuid-old", "photo.png", "Image", "image/png", 123L, "hash-a", fileName)
+                )
+                execSQL(
+                    "INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any>("uuid-video", "video.mp4", "Video", "video/mp4", 456L, "hash-b", "video-file")
+                )
+                close()
+            }
+            helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2).close()
+            val database = Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
+                .addMigrations(DatabaseMigrations.MIGRATION_1_2)
+                .build()
+            try {
+                val memes = database.memeDao().observeMemes().first()
+                assertEquals(2, memes.size)
+                assertEquals(listOf("hash-b", "hash-a"), memes.map { it.contentHash })
+                val photo = memes.single { it.contentHash == "hash-a" }
+                assertTrue(photo.id > 0)
+                assertNotEquals(photo.id, memes.first().id)
+                assertEquals("photo.png", photo.fileName)
+                assertEquals("Image", photo.mediaType)
+                assertEquals("image/png", photo.mimeType)
+                assertEquals(123L, photo.addedAtMillis)
+                assertEquals(fileName, MemeStorageMapper().toDomain(photo).storedFileName)
+                assertTrue(File(directory, photo.storedFileName).readBytes().contentEquals(byteArrayOf(1, 2, 3)))
+
+                val newId = database.memeDao().insert(
+                    MemeEntity(fileName = "new.png", mediaType = "Image", mimeType = "image/png", addedAtMillis = 789, contentHash = "hash-c", storedFileName = "new-file")
+                )
+                assertTrue(newId > memes.maxOf { it.id })
+                assertEquals(-1L, database.memeDao().insert(photo.copy(id = 0)))
+            } finally {
+                database.close()
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun migratesEmptyDatabase() {
+        helper.createDatabase(databaseName, 1).close()
+        helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2).use { database ->
+            database.query("SELECT COUNT(*) FROM memes").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(0, cursor.getInt(0))
+            }
+        }
+    }
+}

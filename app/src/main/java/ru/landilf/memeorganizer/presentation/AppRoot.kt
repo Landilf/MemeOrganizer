@@ -178,7 +178,7 @@ private fun MainTabsScreen(
             if (tabs[page] == MainTab.Home && memes.isNotEmpty()) {
                 LazyVerticalGrid(modifier = Modifier.fillMaxSize(), columns = GridCells.Fixed(3), contentPadding = PaddingValues(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(memes, key = { it.id }) { meme ->
-                        MediaThumbnail(Uri.fromFile(File(context.filesDir, "memes/${meme.id}")), meme.mimeType, Modifier.fillMaxWidth().aspectRatio(1f))
+                        MediaThumbnail(Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")), meme.mimeType, Modifier.fillMaxWidth().aspectRatio(1f))
                     }
                 }
             } else Column(

@@ -20,7 +20,7 @@ import java.time.Instant
 class ObserveMemesUseCaseTest {
     @Test
     fun `observes initial library and subsequent changes`() = runTest {
-        val meme = Meme("1", "meme.png", MemeMediaType.Image, "image/png", Instant.EPOCH, "hash")
+        val meme = Meme(1L, "meme.png", MemeMediaType.Image, "image/png", Instant.EPOCH, "hash", "file")
         val library = MutableStateFlow<List<Meme>>(emptyList())
         val repository = object : MemeRepository {
             override fun observeMemes() = library

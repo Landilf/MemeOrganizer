@@ -13,6 +13,7 @@ class MemeStorageMapper @Inject constructor() {
         mediaType = MemeMediaType.valueOf(entity.mediaType),
         mimeType = entity.mimeType,
         addedAt = Instant.ofEpochMilli(entity.addedAtMillis),
-        contentHash = entity.contentHash
+        contentHash = entity.contentHash,
+        storedFileName = entity.storedFileName
     )
 }

@@ -70,9 +70,9 @@ class MemeRepositoryImpl @Inject constructor(
             null
         } ?: return@withContext ImportResult.Failed(ImportFailure.SourceUnavailable)
 
-        val id = UUID.randomUUID().toString()
+        val storedFileName = UUID.randomUUID().toString()
         val directory = File(context.filesDir, "memes")
-        val target = File(directory, id)
+        val target = File(directory, storedFileName)
         var committed = false
         try {
             input.use { stream ->
@@ -92,15 +92,16 @@ class MemeRepositoryImpl @Inject constructor(
                 }
                 val hash = digest.digest().joinToString("") { "%02x".format(it) }
                 val entity = MemeEntity(
-                    id = id, fileName = fileName, mediaType = mediaType.name,
+                    fileName = fileName, mediaType = mediaType.name,
                     mimeType = mimeType, addedAtMillis = System.currentTimeMillis(),
-                    contentHash = hash, storedFileName = id
+                    contentHash = hash, storedFileName = storedFileName
                 )
                 // Finish the database write and ownership transfer even if cancellation arrives.
                 withContext(NonCancellable) {
-                    if (memeDao.insert(entity) != -1L) {
+                    val id = memeDao.insert(entity)
+                    if (id != -1L) {
                         committed = true
-                        ImportResult.Imported(mapper.toDomain(entity))
+                        ImportResult.Imported(mapper.toDomain(entity.copy(id = id)))
                     } else {
                         val existing = memeDao.findByHash(hash)
                             ?: throw IOException("Conflicting meme was not found")

@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.data.storage.database.AppDatabase
+import ru.landilf.memeorganizer.data.storage.database.DatabaseMigrations
 import javax.inject.Singleton
 
 @Module
@@ -17,7 +18,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, "meme_organizer.db").build()
+        Room.databaseBuilder(context, AppDatabase::class.java, "meme_organizer.db")
+            .addMigrations(DatabaseMigrations.MIGRATION_1_2)
+            .build()
 
     @Provides
     fun provideMemeDao(database: AppDatabase): MemeDao = database.memeDao()
