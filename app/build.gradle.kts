@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.onnxruntime.android)
 
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)

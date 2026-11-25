@@ -6,6 +6,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import ru.landilf.memeorganizer.data.storage.repository.MemeRepositoryImpl
 import ru.landilf.memeorganizer.domain.repository.MemeRepository
+import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
+import ru.landilf.memeorganizer.data.storage.repository.MemeDetailsRepositoryImpl
 import javax.inject.Singleton
 
 @Module
@@ -14,4 +16,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindMemeRepository(implementation: MemeRepositoryImpl): MemeRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMemeDetailsRepository(implementation: MemeDetailsRepositoryImpl): MemeDetailsRepository
 }

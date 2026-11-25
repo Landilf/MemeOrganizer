@@ -61,4 +61,20 @@
     <string name="theme_preview_card">Карточка</string>
     <string name="theme_preview_card_description">Описание карточки</string>
     <string name="theme_preview_checkbox">Флажок</string>
+    <string name="edit_title">Описание и теги</string>
+    <string name="edit_description">Описание</string>
+    <string name="edit_description_count">%1$d / %2$d</string>
+    <string name="edit_tag">Тег</string>
+    <string name="edit_add_tag">Добавить тег</string>
+    <string name="edit_invalid_tag">Добавьте новый тег кнопкой + или очистите поле. Повторяющиеся теги добавить нельзя.</string>
+    <string name="edit_remove_tag">Убрать тег %1$s</string>
+    <string name="edit_discard_title">Отменить изменения?</string>
+    <string name="edit_discard_message">Несохранённые изменения будут потеряны.</string>
+    <string name="edit_error">Не удалось загрузить или сохранить данные. Попробуйте ещё раз.</string>
+    <string name="edit_save">Сохранить</string>
+    <string name="library_delete">Удалить мем</string>
+    <string name="library_delete_title">Удалить из библиотеки?</string>
+    <string name="library_delete_message">Мемы и их копии в приложении будут удалены. Исходные файлы останутся на месте.</string>
+    <string name="library_delete_error">Не удалось удалить все выбранные мемы.</string>
+    <string name="ok_button">Понятно</string>
 </resources>

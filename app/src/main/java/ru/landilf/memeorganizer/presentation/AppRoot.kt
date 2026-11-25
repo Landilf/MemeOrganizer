@@ -10,6 +10,9 @@ import android.net.Uri
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -21,6 +24,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import ru.landilf.memeorganizer.R
@@ -48,6 +53,7 @@ import ru.landilf.memeorganizer.presentation.importing.asText
 import ru.landilf.memeorganizer.presentation.importing.ImportScreen
 import ru.landilf.memeorganizer.presentation.importing.ImportViewModel
 import ru.landilf.memeorganizer.presentation.library.LibraryViewModel
+import ru.landilf.memeorganizer.presentation.library.LibraryViewer
 
 private enum class MainTab(val title: Int, val icon: ImageVector, val message: Int) {
     Albums(R.string.navigation_albums, Icons.Default.Collections, R.string.albums_empty),
@@ -70,6 +76,7 @@ fun AppRoot() {
                     onSettingsClick = { navController.navigate("settings") },
                     onFilesSelected = { sources -> importViewModel.setSources(sources); navController.navigate("import") },
                     memes = memes,
+                    libraryViewModel = libraryViewModel,
                     summary = importState.summary,
                     onSummaryShown = importViewModel::clearSummary
                 )
@@ -106,12 +113,13 @@ fun AppRoot() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun MainTabsScreen(
     onSettingsClick: () -> Unit,
     onFilesSelected: (List<String>) -> Unit,
     memes: List<ru.landilf.memeorganizer.domain.model.meme.Meme>,
+    libraryViewModel: LibraryViewModel,
     summary: ImportSummary?,
     onSummaryShown: () -> Unit
 ) {
@@ -121,6 +129,23 @@ private fun MainTabsScreen(
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var openedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var selected by remember { mutableStateOf(setOf<Long>()) }
+    var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
+    if (deleteError) AlertDialog(onDismissRequest = libraryViewModel::clearDeleteError, title = { Text(stringResource(R.string.library_delete_error)) }, confirmButton = { TextButton(onClick = libraryViewModel::clearDeleteError) { Text(stringResource(R.string.ok_button)) } })
+    if (openedId != null) {
+        LibraryViewer(memes, openedId!!, libraryViewModel) { openedId = null }
+        return
+    }
+    BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text(stringResource(R.string.library_delete_title)) },
+        text = { Text(stringResource(R.string.library_delete_message)) },
+        dismissButton = { TextButton(onClick = { libraryViewModel.delete(selected); selected = emptySet(); confirmDelete = false }) { Text(stringResource(R.string.yes_button)) } },
+        confirmButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.no_button)) } }
+    )
     fun acceptUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         uris.forEach { uri ->
@@ -139,13 +164,20 @@ private fun MainTabsScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(title = {}, actions = {
+                if (selected.isNotEmpty()) Text(stringResource(R.string.import_selected_count, selected.size), Modifier.padding(end = 20.dp))
+                else
                 IconButton(onClick = onSettingsClick) {
                     Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_open))
                 }
             })
         },
         bottomBar = {
-            NavigationBar {
+            if (selected.isNotEmpty()) BottomAppBar {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    TextButton(onClick = { selected = memes.map { it.id }.toSet() }) { Icon(Icons.Default.SelectAll, null); Text(stringResource(R.string.import_select_all)) }
+                    TextButton(onClick = { confirmDelete = true }) { Icon(Icons.Default.Delete, null); Text(stringResource(R.string.import_delete)) }
+                }
+            } else NavigationBar {
                 tabs.forEachIndexed { index, tab ->
                     NavigationBarItem(
                         selected = pagerState.currentPage == index,
@@ -157,7 +189,7 @@ private fun MainTabsScreen(
             }
         },
         floatingActionButton = {
-            if (tabs[pagerState.currentPage] == MainTab.Home) {
+            if (tabs[pagerState.currentPage] == MainTab.Home && selected.isEmpty()) {
                 Box {
                     FloatingActionButton(onClick = { menuExpanded = !menuExpanded }) { Icon(Icons.Default.Add, stringResource(R.string.library_add)) }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -174,11 +206,16 @@ private fun MainTabsScreen(
             }
         }
     ) { padding ->
-        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize().padding(padding)) { page ->
+        HorizontalPager(state = pagerState, userScrollEnabled = selected.isEmpty(), modifier = Modifier.fillMaxSize().padding(padding)) { page ->
             if (tabs[page] == MainTab.Home && memes.isNotEmpty()) {
                 LazyVerticalGrid(modifier = Modifier.fillMaxSize(), columns = GridCells.Fixed(3), contentPadding = PaddingValues(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(memes, key = { it.id }) { meme ->
-                        MediaThumbnail(Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")), meme.mimeType, Modifier.fillMaxWidth().aspectRatio(1f))
+                        Box(Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(onLongClick = { selected = selected + meme.id }, onClick = {
+                            if (selected.isEmpty()) openedId = meme.id else selected = if (meme.id in selected) selected - meme.id else selected + meme.id
+                        })) {
+                            MediaThumbnail(Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")), meme.mimeType, Modifier.fillMaxSize())
+                            if (meme.id in selected) Checkbox(true, { selected = selected - meme.id }, modifier = Modifier.align(Alignment.TopEnd))
+                        }
                     }
                 }
             } else Column(

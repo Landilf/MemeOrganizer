@@ -56,7 +56,7 @@ class DatabaseMigrationsTest {
             }
             helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2).close()
             val database = Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
-                .addMigrations(DatabaseMigrations.MIGRATION_1_2)
+                .addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_2_3)
                 .build()
             try {
                 val memes = database.memeDao().observeMemes().first()
@@ -90,6 +90,28 @@ class DatabaseMigrationsTest {
         helper.createDatabase(databaseName, 1).close()
         helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2).use { database ->
             database.query("SELECT COUNT(*) FROM memes").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(0, cursor.getInt(0))
+            }
+        }
+    }
+
+    @Test
+    fun migratesVersion2AndKeepsExistingMeme() {
+        helper.createDatabase(databaseName, 2).apply {
+            execSQL("INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName) VALUES (7, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored')")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 3, true, DatabaseMigrations.MIGRATION_2_3).use { database ->
+            database.query("SELECT id, fileName, contentHash, storedFileName, description FROM memes").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(7L, cursor.getLong(0))
+                assertEquals("cat.png", cursor.getString(1))
+                assertEquals("hash", cursor.getString(2))
+                assertEquals("stored", cursor.getString(3))
+                assertEquals("", cursor.getString(4))
+            }
+            database.query("SELECT COUNT(*) FROM tags").use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 assertEquals(0, cursor.getInt(0))
             }
