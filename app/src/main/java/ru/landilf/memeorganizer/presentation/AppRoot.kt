@@ -69,6 +69,7 @@ import ru.landilf.memeorganizer.presentation.settings.DeveloperViewModel
 import ru.landilf.memeorganizer.presentation.search.SearchScreen
 import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 import ru.landilf.memeorganizer.domain.model.album.Album
+import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.presentation.library.AlbumCreationError
 
 private enum class MainTab(val title: Int, val icon: ImageVector, val message: Int) {
@@ -263,13 +264,75 @@ fun AppRoot() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun AlbumContentsScreen(
+    album: Album,
+    memes: List<Meme>,
+    onBack: () -> Unit,
+    onMemeClick: (Meme) -> Unit
+) {
+    val context = LocalContext.current
+    BackHandler(onBack = onBack)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(album.name) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back_button)
+                        )
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        if (memes.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    stringResource(R.string.albums_contents_empty),
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
+        } else {
+            LazyVerticalGrid(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                columns = GridCells.Fixed(3),
+                contentPadding = PaddingValues(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(memes, key = { it.id }) { meme ->
+                    Box(
+                        Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(
+                            onClick = { onMemeClick(meme) },
+                            onLongClick = {}
+                        )
+                    ) {
+                        MediaThumbnail(
+                            Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")),
+                            meme.mimeType,
+                            Modifier.fillMaxSize()
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun MainTabsScreen(
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
     onFilesSelected: (List<String>) -> Unit,
-    memes: List<ru.landilf.memeorganizer.domain.model.meme.Meme>,
+    memes: List<Meme>,
     albums: List<Album>,
     libraryViewModel: LibraryViewModel,
     summary: ImportSummary?,
@@ -284,12 +347,20 @@ private fun MainTabsScreen(
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<Long?>(null) }
     var openedFromFavorites by rememberSaveable { mutableStateOf(false) }
+    var openedFromAlbum by rememberSaveable { mutableStateOf(false) }
+    var openedAlbumId by rememberSaveable { mutableStateOf<Long?>(null) }
     var albumDialogVisible by rememberSaveable { mutableStateOf(false) }
+    var albumPickerVisible by rememberSaveable { mutableStateOf(false) }
     var albumName by rememberSaveable { mutableStateOf("") }
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
     val albumCreationError by libraryViewModel.albumCreationError.collectAsStateWithLifecycle()
+    val albumMemes by libraryViewModel.albumMemes.collectAsStateWithLifecycle()
+    val openedAlbum = albums.firstOrNull { it.id == openedAlbumId }
+    LaunchedEffect(openedAlbumId) {
+        openedAlbumId?.let(libraryViewModel::openAlbum) ?: libraryViewModel.closeAlbum()
+    }
     if (deleteError) AlertDialog(
         onDismissRequest = libraryViewModel::clearDeleteError,
         title = { Text(stringResource(R.string.library_delete_error)) },
@@ -300,8 +371,28 @@ private fun MainTabsScreen(
         })
     if (openedId != null) {
         LaunchedEffect(openedId) { snackbar.currentSnackbarData?.dismiss() }
-        val viewerMemes = if (openedFromFavorites) memes.filter { it.isFavorite } else memes
+        val viewerMemes = when {
+            openedFromAlbum -> albumMemes
+            openedFromFavorites -> memes.filter { it.isFavorite }
+            else -> memes
+        }
         LibraryViewer(viewerMemes, openedId!!, libraryViewModel, onBack = { openedId = null })
+        return
+    }
+    if (openedAlbum != null) {
+        AlbumContentsScreen(
+            album = openedAlbum,
+            memes = albumMemes,
+            onBack = {
+                openedAlbumId = null
+                openedFromAlbum = false
+            },
+            onMemeClick = { meme ->
+                openedFromAlbum = true
+                openedFromFavorites = false
+                openedId = meme.id
+            }
+        )
         return
     }
     if (albumDialogVisible) {
@@ -354,6 +445,33 @@ private fun MainTabsScreen(
             }
         )
     }
+    if (albumPickerVisible) AlertDialog(
+        onDismissRequest = { albumPickerVisible = false },
+        title = { Text(stringResource(R.string.albums_add_memes_title)) },
+        text = {
+            LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                lazyItems(albums, key = { it.id }) { album ->
+                    TextButton(
+                        onClick = {
+                            libraryViewModel.addMemesToAlbum(album.id, selected) {
+                                selected = emptySet()
+                                albumPickerVisible = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(album.name, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = { albumPickerVisible = false }) {
+                Text(stringResource(R.string.cancel_button))
+            }
+        }
+    )
     BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
     if (confirmDelete) AlertDialog(
         onDismissRequest = { confirmDelete = false },
@@ -441,6 +559,13 @@ private fun MainTabsScreen(
                             null
                         ); Text(stringResource(R.string.import_select_all))
                     }
+                    TextButton(
+                        onClick = { albumPickerVisible = true },
+                        enabled = albums.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Collections, null)
+                        Text(stringResource(R.string.albums_add_memes))
+                    }
                     TextButton(onClick = { confirmDelete = true }) {
                         Icon(
                             Icons.Default.Delete,
@@ -510,7 +635,12 @@ private fun MainTabsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     lazyItems(albums, key = { it.id }) { album ->
-                        Card(Modifier.fillMaxWidth()) {
+                        Card(
+                            Modifier.fillMaxWidth().combinedClickable(
+                                onClick = { openedAlbumId = album.id },
+                                onLongClick = {}
+                            )
+                        ) {
                             Text(
                                 album.name,
                                 style = MaterialTheme.typography.titleMedium,
@@ -534,6 +664,7 @@ private fun MainTabsScreen(
                                 onClick = {
                                     if (selected.isEmpty()) {
                                         openedFromFavorites = tabs[page] == MainTab.Favorites
+                                        openedFromAlbum = false
                                         openedId = meme.id
                                     } else selected =
                                         if (meme.id in selected) selected - meme.id else selected + meme.id

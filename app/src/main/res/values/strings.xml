@@ -31,6 +31,9 @@
     <string name="albums_create_error_empty">Введите название альбома.</string>
     <string name="albums_create_error_duplicate">Альбом с таким названием уже есть.</string>
     <string name="albums_create_error_failed">Не удалось создать альбом.</string>
+    <string name="albums_add_memes">Добавить в альбом</string>
+    <string name="albums_add_memes_title">Добавить в альбом</string>
+    <string name="albums_contents_empty">В этом альбоме пока нет мемов</string>
 
     <string name="favorites_empty">Здесь будут избранные мемы</string>
 

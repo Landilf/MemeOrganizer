@@ -14,7 +14,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import ru.landilf.memeorganizer.data.storage.database.AppDatabase
+import ru.landilf.memeorganizer.data.storage.entities.album.AlbumEntity
+import ru.landilf.memeorganizer.data.storage.entities.meme.MemeEntity
 import ru.landilf.memeorganizer.data.storage.mappers.album.AlbumStorageMapper
+import ru.landilf.memeorganizer.data.storage.mappers.meme.MemeStorageMapper
 
 @RunWith(AndroidJUnit4::class)
 class AlbumRepositoryImplTest {
@@ -25,7 +28,11 @@ class AlbumRepositoryImplTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
-        repository = AlbumRepositoryImpl(database.albumDao(), AlbumStorageMapper())
+        repository = AlbumRepositoryImpl(
+            database.albumDao(),
+            AlbumStorageMapper(),
+            MemeStorageMapper()
+        )
     }
 
     @After
@@ -40,5 +47,27 @@ class AlbumRepositoryImplTest {
 
         val albums = repository.observeAlbums().first()
         assertEquals(listOf("Коты"), albums.map { it.name })
+    }
+
+    @Test
+    fun addsMemesToAlbumAndIgnoresExistingLinks() = runBlocking {
+        val albumId = database.albumDao().insert(
+            AlbumEntity(name = "Коты", normalizedName = "коты", createdAtMillis = 123)
+        )
+        val memeId = database.memeDao().insert(
+            MemeEntity(
+                fileName = "cat.png",
+                mediaType = "Image",
+                mimeType = "image/png",
+                addedAtMillis = 456,
+                contentHash = "cat-hash",
+                storedFileName = "cat-file"
+            )
+        )
+
+        repository.addMemes(albumId, setOf(memeId))
+        repository.addMemes(albumId, setOf(memeId))
+
+        assertEquals(listOf(memeId), repository.observeMemes(albumId).first().map { it.id })
     }
 }

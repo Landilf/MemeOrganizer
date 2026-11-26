@@ -3,7 +3,10 @@ package ru.landilf.memeorganizer.presentation.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +18,9 @@ import ru.landilf.memeorganizer.domain.usecase.meme.ObserveMemesUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SetMemeFavoriteUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumsUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumMemesUseCase
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
@@ -36,14 +41,17 @@ data class EditState(
     val error: Boolean = false
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     observeMemes: ObserveMemesUseCase,
     observeAlbums: ObserveAlbumsUseCase,
+    observeAlbumMemes: ObserveAlbumMemesUseCase,
     private val detailsRepository: MemeDetailsRepository,
     private val saveDetails: SaveMemeDetailsUseCase,
     private val setMemeFavorite: SetMemeFavoriteUseCase,
     private val createNewAlbum: CreateAlbumUseCase,
+    private val addMemes: AddMemesToAlbumUseCase,
     private val searchRepository: MemeSearchRepository,
     private val lightLog: LightLogStore
 ) : ViewModel() {
@@ -51,6 +59,12 @@ class LibraryViewModel @Inject constructor(
         observeMemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val albums =
         observeAlbums().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val openedAlbumId = MutableStateFlow<Long?>(null)
+    val albumMemes = openedAlbumId
+        .flatMapLatest { albumId ->
+            if (albumId == null) flowOf(emptyList()) else observeAlbumMemes(albumId)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val tags = detailsRepository.observeTags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     private val _edit = MutableStateFlow<EditState?>(null)
@@ -167,6 +181,28 @@ class LibraryViewModel @Inject constructor(
 
     fun clearAlbumCreationError() {
         _albumCreationError.value = null
+    }
+
+    fun openAlbum(albumId: Long) {
+        openedAlbumId.value = albumId
+    }
+
+    fun closeAlbum() {
+        openedAlbumId.value = null
+    }
+
+    fun addMemesToAlbum(albumId: Long, memeIds: Set<Long>, onAdded: () -> Unit) {
+        if (memeIds.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                addMemes(albumId, memeIds)
+                onAdded()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                AppLogger.app { "album.memes.add.failed type=${error.javaClass.simpleName}" }
+            }
+        }
     }
 
     fun recordSearchCopy(searchId: String, meme: Meme, rank: Int, impressionAtMs: Long) {

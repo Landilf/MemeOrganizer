@@ -13,10 +13,19 @@ import ru.landilf.memeorganizer.data.storage.entities.logging.LightLogEventEntit
 import ru.landilf.memeorganizer.data.storage.dao.LightLogDao
 import ru.landilf.memeorganizer.data.storage.dao.AlbumDao
 import ru.landilf.memeorganizer.data.storage.entities.album.AlbumEntity
+import ru.landilf.memeorganizer.data.storage.entities.album.AlbumMemeEntity
 
 @Database(
-    entities = [MemeEntity::class, TagEntity::class, MemeTagEntity::class, TextEmbeddingEntity::class, LightLogEventEntity::class, AlbumEntity::class],
-    version = 7,
+    entities = [
+        MemeEntity::class,
+        TagEntity::class,
+        MemeTagEntity::class,
+        TextEmbeddingEntity::class,
+        LightLogEventEntity::class,
+        AlbumEntity::class,
+        AlbumMemeEntity::class
+    ],
+    version = 8,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -80,7 +80,8 @@ class DatabaseMigrationsTest {
                     DatabaseMigrations.MIGRATION_3_4,
                     DatabaseMigrations.MIGRATION_4_5,
                     DatabaseMigrations.MIGRATION_5_6,
-                    DatabaseMigrations.MIGRATION_6_7
+                    DatabaseMigrations.MIGRATION_6_7,
+                    DatabaseMigrations.MIGRATION_7_8
                 )
                 .build()
             try {
@@ -222,6 +223,29 @@ class DatabaseMigrationsTest {
                 database.query("SELECT name FROM albums").use { cursor ->
                     assertTrue(cursor.moveToFirst())
                     assertEquals("Коты", cursor.getString(0))
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion7AndCreatesAlbumMemeStorage() {
+        helper.createDatabase(databaseName, 6).close()
+        helper.runMigrationsAndValidate(databaseName, 7, true, DatabaseMigrations.MIGRATION_6_7)
+            .use { database ->
+                database.execSQL(
+                    "INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName, description, isFavorite) VALUES (11, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored', '', 0)"
+                )
+                database.execSQL(
+                    "INSERT INTO albums (id, name, normalizedName, createdAtMillis) VALUES (1, 'Коты', 'коты', 123)"
+                )
+            }
+        helper.runMigrationsAndValidate(databaseName, 8, true, DatabaseMigrations.MIGRATION_7_8)
+            .use { database ->
+                database.execSQL("INSERT INTO album_memes (albumId, memeId) VALUES (1, 11)")
+                database.query("SELECT albumId, memeId FROM album_memes").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(1L, cursor.getLong(0))
+                    assertEquals(11L, cursor.getLong(1))
                 }
             }
     }
