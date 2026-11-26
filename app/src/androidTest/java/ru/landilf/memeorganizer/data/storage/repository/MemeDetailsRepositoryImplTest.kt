@@ -13,6 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import ru.landilf.memeorganizer.data.storage.database.AppDatabase
 import ru.landilf.memeorganizer.data.storage.entities.meme.MemeEntity
+import ru.landilf.memeorganizer.core.logging.LightLogStore
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import java.io.File
 import java.util.UUID
@@ -28,7 +29,7 @@ class MemeDetailsRepositoryImplTest {
     @Before fun setUp() = runBlocking {
         context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
-        repository = MemeDetailsRepositoryImpl(context, database)
+        repository = MemeDetailsRepositoryImpl(context, database, LightLogStore(context, database.lightLogDao()))
         val directory = File(context.filesDir, "memes").apply { mkdirs() }
         file = File(directory, UUID.randomUUID().toString()).apply { writeText("media") }
         id = database.memeDao().insert(MemeEntity(fileName = "cat.png", mediaType = "Image", mimeType = "image/png", addedAtMillis = 1, contentHash = "hash", storedFileName = file.name))

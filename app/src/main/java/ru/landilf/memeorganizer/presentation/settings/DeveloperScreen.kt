@@ -9,13 +9,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,6 +36,7 @@ import ru.landilf.memeorganizer.R
 fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     var includeMedia by rememberSaveable { mutableStateOf(true) }
+    var clearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(if (includeMedia) "application/zip" else "application/gzip")) { uri ->
         if (uri != null) viewModel.export(uri, includeMedia)
     }
@@ -42,6 +46,22 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back_button)) } }
         )
     }) { padding ->
+        if (clearConfirmationVisible) {
+            AlertDialog(
+                onDismissRequest = { clearConfirmationVisible = false },
+                title = { Text(stringResource(R.string.developer_clear_logs_title)) },
+                text = { Text(stringResource(R.string.developer_clear_logs_message)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        clearConfirmationVisible = false
+                        viewModel.clearLogs()
+                    }) { Text(stringResource(R.string.yes_button)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { clearConfirmationVisible = false }) { Text(stringResource(R.string.no_button)) }
+                }
+            )
+        }
         Column(Modifier.padding(padding).padding(24.dp)) {
             Text(stringResource(R.string.developer_logs_description), style = MaterialTheme.typography.bodyMedium)
             androidx.compose.foundation.layout.Row(Modifier.padding(top = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -54,13 +74,21 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                     viewModel.clearStatus()
                     filePicker.launch(if (includeMedia) "meme-organizer-full-debug.zip" else "meme-organizer-events.jsonl.gz")
                 },
-                enabled = status != DebugExportStatus.Exporting,
+                enabled = status != DebugExportStatus.Exporting && status != DebugExportStatus.Clearing,
                 modifier = Modifier.padding(top = 16.dp)
             ) { Text(stringResource(R.string.developer_export_logs)) }
+            OutlinedButton(
+                onClick = { clearConfirmationVisible = true },
+                enabled = status != DebugExportStatus.Exporting && status != DebugExportStatus.Clearing,
+                modifier = Modifier.padding(top = 12.dp)
+            ) { Text(stringResource(R.string.developer_clear_logs)) }
             when (status) {
                 DebugExportStatus.Exporting -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 16.dp))
-                DebugExportStatus.Success -> Text(stringResource(R.string.developer_export_success), Modifier.padding(top = 16.dp))
-                DebugExportStatus.Error -> Text(stringResource(R.string.developer_export_error), Modifier.padding(top = 16.dp))
+                DebugExportStatus.Clearing -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 16.dp))
+                DebugExportStatus.ExportSuccess -> Text(stringResource(R.string.developer_export_success), Modifier.padding(top = 16.dp))
+                DebugExportStatus.ExportError -> Text(stringResource(R.string.developer_export_error), Modifier.padding(top = 16.dp))
+                DebugExportStatus.ClearSuccess -> Text(stringResource(R.string.developer_clear_logs_success), Modifier.padding(top = 16.dp))
+                DebugExportStatus.ClearError -> Text(stringResource(R.string.developer_clear_logs_error), Modifier.padding(top = 16.dp))
                 DebugExportStatus.Idle -> Unit
             }
         }

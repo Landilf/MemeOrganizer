@@ -31,11 +31,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
+import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(state: SearchUiState, onQueryChanged: (String) -> Unit, onBack: () -> Unit, onMemeClick: (Long) -> Unit) {
+fun SearchScreen(state: SearchUiState, onQueryChanged: (String) -> Unit, onBack: () -> Unit, onMemeClick: (MemeSearchResult) -> Unit) {
     val context = LocalContext.current
     Scaffold(topBar = {
         TopAppBar(
@@ -78,7 +79,7 @@ fun SearchScreen(state: SearchUiState, onQueryChanged: (String) -> Unit, onBack:
                 MediaThumbnail(
                     uri = Uri.fromFile(File(context.filesDir, "memes/${result.meme.storedFileName}")),
                     mimeType = result.meme.mimeType,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onMemeClick(result.meme.id) }
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onMemeClick(result) }
                 )
             }
         }

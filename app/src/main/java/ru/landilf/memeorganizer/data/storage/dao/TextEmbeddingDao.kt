@@ -17,7 +17,7 @@ interface TextEmbeddingDao {
     @Query(
         """
         SELECT memes.id AS memeId, memes.description AS description,
-               COALESCE(GROUP_CONCAT(tags.name, ' '), '') AS tags
+               COALESCE(GROUP_CONCAT(tags.name, char(31)), '') AS tags
         FROM memes
         LEFT JOIN meme_tags ON memes.id = meme_tags.memeId
         LEFT JOIN tags ON tags.id = meme_tags.tagId

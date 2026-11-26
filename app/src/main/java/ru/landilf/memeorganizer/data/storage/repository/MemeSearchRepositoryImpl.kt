@@ -1,9 +1,11 @@
 package ru.landilf.memeorganizer.data.storage.repository
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
+import ru.landilf.memeorganizer.core.logging.LightLogStore
 import ru.landilf.memeorganizer.data.ml.TextEmbeddingEngine
 import ru.landilf.memeorganizer.data.ml.TextModelPackage
 import ru.landilf.memeorganizer.data.search.EmbeddingCodec
@@ -17,6 +19,9 @@ import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.model.search.SearchPreparation
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 import java.security.MessageDigest
+import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,7 +30,8 @@ class MemeSearchRepositoryImpl @Inject constructor(
     private val installer: LocalModelInstaller,
     private val memeDao: MemeDao,
     private val embeddingDao: TextEmbeddingDao,
-    private val mapper: MemeStorageMapper
+    private val mapper: MemeStorageMapper,
+    private val lightLog: LightLogStore
 ) : MemeSearchRepository {
     override suspend fun prepare(): SearchPreparation = withContext(Dispatchers.IO) {
         val modelPackage = installer.activePackage() ?: return@withContext SearchPreparation(false, 0)
@@ -43,33 +49,85 @@ class MemeSearchRepositoryImpl @Inject constructor(
 
     override suspend fun search(query: String): List<MemeSearchResult> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
+        val totalStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
         val modelPackage = installer.activePackage() ?: return@withContext emptyList()
+        val databaseStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
         val documents = embeddingDao.searchDocuments()
         val embeddings = embeddingDao.getByModel(modelPackage.modelSha256).associateBy { it.memeId }
         val indexed = documents.mapNotNull { document -> embeddings[document.memeId]?.let { document to it } }
-        if (indexed.isEmpty()) return@withContext emptyList()
+        val databaseMs = elapsedMs(databaseStartedAt)
+        if (indexed.isEmpty()) {
+            lightLog.record(
+                "search_impression",
+                JSONObject()
+                    .put("search_id", UUID.randomUUID().toString())
+                    .put("query_text", query)
+                    .put("model_release_tag", modelPackage.releaseTag ?: JSONObject.NULL)
+                    .put("latency_ms", JSONObject()
+                        .put("database_search", databaseMs)
+                        .put("model", JSONObject()
+                            .put("text_encoder", JSONObject.NULL)
+                            .put("visual_text_encoder", JSONObject.NULL)
+                            .put("reranker", JSONObject.NULL))
+                        .put("scoring", JSONObject()
+                            .put("dense", JSONObject.NULL)
+                            .put("bm25", JSONObject.NULL)
+                            .put("fusion", JSONObject.NULL))
+                        .put("total", elapsedMs(totalStartedAt)))
+                    .put("candidates", JSONArray())
+            )
+            return@withContext emptyList()
+        }
 
         val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
         AppLogger.ml { "search.start query_length=${query.length} candidates=${indexed.size}" }
+        val encodeStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
         val queryEmbedding = TextEmbeddingEngine.open(modelPackage).use { it.encodeQuery(query) }
+        val encodeMs = elapsedMs(encodeStartedAt)
         val documentsText = indexed.map { documentText(it.first) }
+        val denseStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
         val denseScores = indexed.map { EmbeddingCodec.cosine(queryEmbedding, EmbeddingCodec.decode(it.second.embedding, modelPackage.dimension)) }
+        val denseMs = elapsedMs(denseStartedAt)
+        val bm25StartedAt = android.os.SystemClock.elapsedRealtimeNanos()
         val bm25Scores = SimpleBm25(documentsText).scores(query).toList()
+        val bm25Ms = elapsedMs(bm25StartedAt)
+        val fusionStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
         val normalizedDense = minMax(denseScores)
         val normalizedBm25 = minMax(bm25Scores)
         val ranked = indexed.indices.sortedByDescending { index ->
             modelPackage.denseWeight * normalizedDense[index] + modelPackage.bm25Weight * normalizedBm25[index]
         }
+        val fusionMs = elapsedMs(fusionStartedAt)
         val memesById = memeDao.getByIds(ranked.map { indexed[it].first.memeId }).associateBy { it.id }
-        ranked.mapNotNull { index ->
-            val meme = memesById[indexed[index].first.memeId] ?: return@mapNotNull null
+        val searchId = UUID.randomUUID().toString()
+        val impressionAtMs = System.currentTimeMillis()
+        val results = ranked.mapIndexedNotNull { position, index ->
+            val meme = memesById[indexed[index].first.memeId] ?: return@mapIndexedNotNull null
             MemeSearchResult(
                 meme = mapper.toDomain(meme),
+                searchId = searchId,
+                rank = position + 1,
+                impressionAtMs = impressionAtMs,
                 score = modelPackage.denseWeight * normalizedDense[index] + modelPackage.bm25Weight * normalizedBm25[index],
                 textScore = denseScores[index],
                 bm25Score = bm25Scores[index]
             )
-        }.also { results ->
+        }
+        lightLog.record("search_impression", JSONObject()
+            .put("search_id", searchId)
+            .put("query_text", query)
+            .put("model_release_tag", modelPackage.releaseTag ?: JSONObject.NULL)
+            .put("latency_ms", JSONObject().put("database_search", databaseMs).put("model", JSONObject().put("text_encoder", encodeMs).put("visual_text_encoder", JSONObject.NULL).put("reranker", JSONObject.NULL)).put("scoring", JSONObject().put("dense", denseMs).put("bm25", bm25Ms).put("fusion", fusionMs)).put("total", elapsedMs(totalStartedAt)))
+            .put("candidates", JSONArray().apply {
+                ranked.take(20).forEachIndexed { position, index ->
+                    val document = indexed[index].first
+                    val meme = memesById[document.memeId] ?: return@forEachIndexed
+                    put(JSONObject().put("rank", position + 1).put("file_hash", meme.contentHash).put("file_name", meme.fileName).put("mime_type", meme.mimeType)
+                        .put("candidate_input", JSONObject().put("description", document.description).put("tags", JSONArray(document.tags.split('\u001f').filter(String::isNotBlank))).put("indexed_text", documentText(document)))
+                        .put("scores", JSONObject().put("text_raw", denseScores[index]).put("bm25_raw", bm25Scores[index]).put("text_normalized", normalizedDense[index]).put("bm25_normalized", normalizedBm25[index]).put("final", modelPackage.denseWeight * normalizedDense[index] + modelPackage.bm25Weight * normalizedBm25[index])))
+                }
+            }))
+        results.also { results ->
             val elapsedMs = (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000.0
             AppLogger.ml { "search.done results=${results.size} elapsed_ms=%.2f".format(java.util.Locale.ROOT, elapsedMs) }
         }
@@ -91,15 +149,46 @@ class MemeSearchRepositoryImpl @Inject constructor(
         TextEmbeddingEngine.open(modelPackage).use { engine ->
             pending.forEach { document ->
                 val text = documentText(document)
-                embeddingDao.upsert(
-                    TextEmbeddingEntity(
-                        memeId = document.memeId,
-                        modelSha256 = modelPackage.modelSha256,
-                        contentFingerprint = fingerprint(text),
-                        embedding = EmbeddingCodec.encode(engine.encodePassage(text)),
-                        indexedAtMillis = System.currentTimeMillis()
+                val itemStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
+                var modelMs: Long? = null
+                var databaseWriteMs: Long? = null
+                try {
+                    val modelStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
+                    val embedding = engine.encodePassage(text)
+                    modelMs = elapsedMs(modelStartedAt)
+                    val databaseStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
+                    embeddingDao.upsert(
+                        TextEmbeddingEntity(
+                            memeId = document.memeId,
+                            modelSha256 = modelPackage.modelSha256,
+                            contentFingerprint = fingerprint(text),
+                            embedding = EmbeddingCodec.encode(embedding),
+                            indexedAtMillis = System.currentTimeMillis()
+                        )
                     )
-                )
+                    databaseWriteMs = elapsedMs(databaseStartedAt)
+                    recordIndexingEvent(
+                        memeId = document.memeId,
+                        modelPackage = modelPackage,
+                        modelMs = modelMs,
+                        databaseWriteMs = databaseWriteMs,
+                        totalMs = elapsedMs(itemStartedAt),
+                        status = "done"
+                    )
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    recordIndexingEvent(
+                        memeId = document.memeId,
+                        modelPackage = modelPackage,
+                        modelMs = modelMs,
+                        databaseWriteMs = databaseWriteMs,
+                        totalMs = elapsedMs(itemStartedAt),
+                        status = "failed",
+                        errorType = error.javaClass.simpleName
+                    )
+                    throw error
+                }
             }
         }
         val elapsedMs = (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000.0
@@ -108,7 +197,36 @@ class MemeSearchRepositoryImpl @Inject constructor(
     }
 
     private fun documentText(document: SearchDocumentRow): String =
-        listOf(document.description.trim(), document.tags.trim()).filter(String::isNotBlank).joinToString("\n")
+        listOf(document.description.trim(), document.tags.replace('\u001f', ' ').trim()).filter(String::isNotBlank).joinToString("\n")
+
+    private fun elapsedMs(startedAt: Long): Long = (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000L
+
+    private suspend fun recordIndexingEvent(
+        memeId: Long,
+        modelPackage: TextModelPackage,
+        modelMs: Long?,
+        databaseWriteMs: Long?,
+        totalMs: Long,
+        status: String,
+        errorType: String? = null
+    ) {
+        val meme = memeDao.getById(memeId) ?: return
+        lightLog.record(
+            "indexing_event",
+            JSONObject()
+                .put("file_hash", meme.contentHash)
+                .put("model_release_tag", modelPackage.releaseTag ?: JSONObject.NULL)
+                .put("model_latency_ms", JSONObject()
+                    .put("text_encoder", modelMs ?: JSONObject.NULL)
+                    .put("visual_encoder", JSONObject.NULL)
+                    .put("ocr_engine", JSONObject.NULL)
+                    .put("asr_engine", JSONObject.NULL))
+                .put("database_write_ms", databaseWriteMs ?: JSONObject.NULL)
+                .put("total_ms", totalMs)
+                .put("status", status)
+                .put("error_type", errorType ?: JSONObject.NULL)
+        )
+    }
 
     private fun fingerprint(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }

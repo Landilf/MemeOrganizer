@@ -13,7 +13,7 @@ import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.core.logging.DebugLogExporter
 import javax.inject.Inject
 
-enum class DebugExportStatus { Idle, Exporting, Success, Error }
+enum class DebugExportStatus { Idle, Exporting, ExportSuccess, ExportError, Clearing, ClearSuccess, ClearError }
 
 @HiltViewModel
 class DeveloperViewModel @Inject constructor(private val exporter: DebugLogExporter) : ViewModel() {
@@ -21,20 +21,36 @@ class DeveloperViewModel @Inject constructor(private val exporter: DebugLogExpor
     val status = _status.asStateFlow()
 
     fun export(destination: Uri, includeMedia: Boolean) {
-        if (_status.value == DebugExportStatus.Exporting) return
+        if (_status.value == DebugExportStatus.Exporting || _status.value == DebugExportStatus.Clearing) return
         _status.value = DebugExportStatus.Exporting
         viewModelScope.launch {
             try {
                 if (includeMedia) exporter.exportFullBundle(destination) else exporter.exportLogs(destination)
-                _status.value = DebugExportStatus.Success
+                _status.value = DebugExportStatus.ExportSuccess
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 AppLogger.app { "debug.export.failed type=${error.javaClass.simpleName}" }
-                _status.value = DebugExportStatus.Error
+                _status.value = DebugExportStatus.ExportError
             }
         }
     }
 
     fun clearStatus() { _status.update { DebugExportStatus.Idle } }
+
+    fun clearLogs() {
+        if (_status.value == DebugExportStatus.Exporting || _status.value == DebugExportStatus.Clearing) return
+        _status.value = DebugExportStatus.Clearing
+        viewModelScope.launch {
+            try {
+                exporter.clearLogs()
+                _status.value = DebugExportStatus.ClearSuccess
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppLogger.app { "debug.clear.failed type=${error.javaClass.simpleName}" }
+                _status.value = DebugExportStatus.ClearError
+            }
+        }
+    }
 }

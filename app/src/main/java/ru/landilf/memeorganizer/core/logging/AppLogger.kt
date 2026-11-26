@@ -46,6 +46,10 @@ object AppLogger {
             store?.append(channel = "ml", level = "error", message = value, errorType = error.javaClass.simpleName)
         }
     }
+
+    suspend fun clearPersistedEvents() {
+        if (BuildConfig.DEBUG) store?.clear()
+    }
 }
 
 internal class DebugLogStore(context: Context) {
@@ -67,6 +71,12 @@ internal class DebugLogStore(context: Context) {
                 if (errorType != null) record.put("error_type", errorType)
                 file.appendText(record.toString() + "\n")
             }
+        }
+    }
+
+    suspend fun clear() {
+        writeLock.withLock {
+            file.delete()
         }
     }
 

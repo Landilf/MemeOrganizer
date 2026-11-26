@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
+import ru.landilf.memeorganizer.core.logging.LightLogStore
+import org.json.JSONObject
 import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.usecase.search.PrepareMemeSearchUseCase
 import ru.landilf.memeorganizer.domain.usecase.search.SearchMemesUseCase
@@ -27,11 +29,13 @@ data class SearchUiState(
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val prepareSearch: PrepareMemeSearchUseCase,
-    private val searchMemes: SearchMemesUseCase
+    private val searchMemes: SearchMemesUseCase,
+    private val lightLog: LightLogStore
 ) : ViewModel() {
     private val _state = MutableStateFlow(SearchUiState())
     val state = _state.asStateFlow()
     private var queryJob: Job? = null
+    private val actedSearchIds = mutableSetOf<String>()
 
     init {
         viewModelScope.launch {
@@ -48,6 +52,15 @@ class SearchViewModel @Inject constructor(
     }
 
     fun updateQuery(query: String) {
+        _state.value.results.firstOrNull()?.takeIf { it.searchId !in actedSearchIds && query != _state.value.query }?.let { result ->
+            actedSearchIds += result.searchId
+            viewModelScope.launch {
+                lightLog.record("search_action", JSONObject()
+                    .put("search_id", result.searchId)
+                    .put("action_type", "reformulate")
+                    .put("time_since_impression_ms", System.currentTimeMillis() - result.impressionAtMs))
+            }
+        }
         _state.update { it.copy(query = query, error = false) }
         queryJob?.cancel()
         if (query.isBlank() || !_state.value.modelAvailable) {
@@ -65,6 +78,30 @@ class SearchViewModel @Inject constructor(
             } catch (error: Exception) {
                 AppLogger.mlError(error) { "search.query.failed" }
                 _state.update { state -> if (state.query == query) state.copy(preparing = false, error = true) else state }
+            }
+        }
+    }
+
+    fun open(result: MemeSearchResult) {
+        actedSearchIds += result.searchId
+        viewModelScope.launch {
+            lightLog.record("search_action", JSONObject()
+                .put("search_id", result.searchId)
+                .put("action_type", "open")
+                .put("file_hash", result.meme.contentHash)
+                .put("rank", result.rank)
+                .put("time_since_impression_ms", System.currentTimeMillis() - result.impressionAtMs))
+        }
+    }
+
+    fun abandonCurrentSearch() {
+        _state.value.results.firstOrNull()?.takeIf { it.searchId !in actedSearchIds }?.let { result ->
+            actedSearchIds += result.searchId
+            viewModelScope.launch {
+                lightLog.record("search_action", JSONObject()
+                    .put("search_id", result.searchId)
+                    .put("action_type", "abandon")
+                    .put("time_since_impression_ms", System.currentTimeMillis() - result.impressionAtMs))
             }
         }
     }

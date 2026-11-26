@@ -15,6 +15,9 @@ import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
+import ru.landilf.memeorganizer.core.logging.LightLogStore
+import org.json.JSONObject
+import ru.landilf.memeorganizer.domain.model.meme.Meme
 import javax.inject.Inject
 
 data class EditState(val memeId: Long, val description: String = "", val tags: List<String> = emptyList(), val original: MemeDetails? = null, val loading: Boolean = true, val saving: Boolean = false, val error: Boolean = false)
@@ -24,7 +27,8 @@ class LibraryViewModel @Inject constructor(
     observeMemes: ObserveMemesUseCase,
     private val detailsRepository: MemeDetailsRepository,
     private val saveDetails: SaveMemeDetailsUseCase,
-    private val searchRepository: MemeSearchRepository
+    private val searchRepository: MemeSearchRepository,
+    private val lightLog: LightLogStore
 ) : ViewModel() {
     val memes = observeMemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val tags = detailsRepository.observeTags().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -67,4 +71,15 @@ class LibraryViewModel @Inject constructor(
         }
     }
     fun clearDeleteError() { _deleteError.value = false }
+
+    fun recordSearchCopy(searchId: String, meme: Meme, rank: Int, impressionAtMs: Long) {
+        viewModelScope.launch {
+            lightLog.record("search_action", JSONObject()
+                .put("search_id", searchId)
+                .put("action_type", "copy")
+                .put("file_hash", meme.contentHash)
+                .put("rank", rank)
+                .put("time_since_impression_ms", System.currentTimeMillis() - impressionAtMs))
+        }
+    }
 }

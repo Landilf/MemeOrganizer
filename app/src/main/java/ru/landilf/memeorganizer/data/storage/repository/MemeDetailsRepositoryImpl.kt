@@ -13,12 +13,16 @@ import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.model.meme.MemeTextRules
 import ru.landilf.memeorganizer.domain.model.meme.TagSuggestion
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
+import ru.landilf.memeorganizer.core.logging.LightLogStore
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import javax.inject.Inject
 
 class MemeDetailsRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val database: AppDatabase
+    private val database: AppDatabase,
+    private val lightLog: LightLogStore
 ) : MemeDetailsRepository {
     private val memes get() = database.memeDao()
     private val tags get() = database.tagDao()
@@ -28,18 +32,31 @@ class MemeDetailsRepositoryImpl @Inject constructor(
         val meme = requireNotNull(memes.getById(memeId))
         MemeDetails(meme.description, tags.getMemeTags(memeId))
     }
-    override suspend fun save(memeId: Long, details: MemeDetails) = database.withTransaction {
-        MemeTextRules.validate(details.description, details.tags)
-        check(memes.updateDescription(memeId, details.description) == 1)
-        tags.clearLinks(memeId)
-        details.tags.forEach { name ->
-            val normalized = MemeTextRules.normalizeTag(name)
-            val existing = tags.findByName(normalized)
-            val id = existing?.id ?: tags.insertTag(TagEntity(name = name.trim(), normalizedName = normalized)).let {
-                if (it == -1L) requireNotNull(tags.findByName(normalized)).id else it
+    override suspend fun save(memeId: Long, details: MemeDetails) {
+        val normalizedTags = details.tags.map(String::trim)
+        val hash = database.withTransaction {
+            MemeTextRules.validate(details.description, normalizedTags)
+            val meme = requireNotNull(memes.getById(memeId))
+            check(memes.updateDescription(memeId, details.description) == 1)
+            tags.clearLinks(memeId)
+            normalizedTags.forEach { name ->
+                val normalized = MemeTextRules.normalizeTag(name)
+                val existing = tags.findByName(normalized)
+                val id = existing?.id ?: tags.insertTag(TagEntity(name = name, normalizedName = normalized)).let {
+                    if (it == -1L) requireNotNull(tags.findByName(normalized)).id else it
+                }
+                tags.insertLink(MemeTagEntity(memeId, id))
             }
-            tags.insertLink(MemeTagEntity(memeId, id))
+            meme.contentHash
         }
+        lightLog.record(
+            "meme_annotation",
+            JSONObject()
+                .put("file_hash", hash)
+                .put("description", details.description)
+                .put("tags", JSONArray(normalizedTags))
+                .put("annotation_source", "user")
+        )
     }
     override suspend fun delete(memeIds: Set<Long>) = withContext(Dispatchers.IO) {
         for (id in memeIds) {

@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import ru.landilf.memeorganizer.BuildConfig
 import ru.landilf.memeorganizer.presentation.theme.MemeOrganizerTheme
 import kotlinx.coroutines.launch
@@ -101,15 +103,41 @@ fun AppRoot() {
                 SearchScreen(
                     state = searchState,
                     onQueryChanged = searchViewModel::updateQuery,
-                    onBack = { navController.popBackStack() },
-                    onMemeClick = { id -> navController.navigate("viewer/$id") }
+                    onBack = {
+                        searchViewModel.abandonCurrentSearch()
+                        navController.popBackStack()
+                    },
+                    onMemeClick = { result ->
+                        searchViewModel.open(result)
+                        navController.navigate("viewer/${result.meme.id}?searchId=${result.searchId}&rank=${result.rank}&impressionAtMs=${result.impressionAtMs}")
+                    }
                 )
             }
-            composable("viewer/{memeId}") { entry ->
+            composable(
+                route = "viewer/{memeId}?searchId={searchId}&rank={rank}&impressionAtMs={impressionAtMs}",
+                arguments = listOf(
+                    navArgument("searchId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("rank") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("impressionAtMs") { type = NavType.LongType; defaultValue = -1L }
+                )
+            ) { entry ->
                 val libraryViewModel: LibraryViewModel = hiltViewModel()
                 val memes by libraryViewModel.memes.collectAsStateWithLifecycle()
                 val memeId = entry.arguments?.getString("memeId")?.toLongOrNull()
-                if (memeId != null) LibraryViewer(memes, memeId, libraryViewModel) { navController.popBackStack() }
+                val searchId = entry.arguments?.getString("searchId")
+                val rank = entry.arguments?.getInt("rank") ?: -1
+                val impressionAtMs = entry.arguments?.getLong("impressionAtMs") ?: -1L
+                if (memeId != null) LibraryViewer(
+                    memes = memes,
+                    initialId = memeId,
+                    viewModel = libraryViewModel,
+                    onBack = { navController.popBackStack() },
+                    onCopy = { meme ->
+                        if (searchId != null && rank > 0 && impressionAtMs > 0) {
+                            libraryViewModel.recordSearchCopy(searchId, meme, rank, impressionAtMs)
+                        }
+                    }
+                )
             }
             composable("settings") {
                 val modelViewModel: ModelSettingsViewModel = hiltViewModel()
@@ -204,7 +232,7 @@ private fun MainTabsScreen(
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
     if (deleteError) AlertDialog(onDismissRequest = libraryViewModel::clearDeleteError, title = { Text(stringResource(R.string.library_delete_error)) }, confirmButton = { TextButton(onClick = libraryViewModel::clearDeleteError) { Text(stringResource(R.string.ok_button)) } })
     if (openedId != null) {
-        LibraryViewer(memes, openedId!!, libraryViewModel) { openedId = null }
+        LibraryViewer(memes, openedId!!, libraryViewModel, onBack = { openedId = null })
         return
     }
     BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
