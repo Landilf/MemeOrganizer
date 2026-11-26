@@ -24,7 +24,8 @@ import java.util.UUID
 class DatabaseMigrationsTest {
     private lateinit var context: Context
     private lateinit var databaseName: String
-    private val helper = MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AppDatabase::class.java)
+    private val helper =
+        MigrationTestHelper(InstrumentationRegistry.getInstrumentation(), AppDatabase::class.java)
 
     @Before
     fun setUp() {
@@ -46,15 +47,32 @@ class DatabaseMigrationsTest {
             helper.createDatabase(databaseName, 1).apply {
                 execSQL(
                     "INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    arrayOf<Any>("uuid-old", "photo.png", "Image", "image/png", 123L, "hash-a", fileName)
+                    arrayOf<Any>(
+                        "uuid-old",
+                        "photo.png",
+                        "Image",
+                        "image/png",
+                        123L,
+                        "hash-a",
+                        fileName
+                    )
                 )
                 execSQL(
                     "INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    arrayOf<Any>("uuid-video", "video.mp4", "Video", "video/mp4", 456L, "hash-b", "video-file")
+                    arrayOf<Any>(
+                        "uuid-video",
+                        "video.mp4",
+                        "Video",
+                        "video/mp4",
+                        456L,
+                        "hash-b",
+                        "video-file"
+                    )
                 )
                 close()
             }
-            helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2).close()
+            helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2)
+                .close()
             val database = Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
                 .addMigrations(
                     DatabaseMigrations.MIGRATION_1_2,
@@ -75,10 +93,20 @@ class DatabaseMigrationsTest {
                 assertEquals("image/png", photo.mimeType)
                 assertEquals(123L, photo.addedAtMillis)
                 assertEquals(fileName, MemeStorageMapper().toDomain(photo).storedFileName)
-                assertTrue(File(directory, photo.storedFileName).readBytes().contentEquals(byteArrayOf(1, 2, 3)))
+                assertTrue(
+                    File(directory, photo.storedFileName).readBytes()
+                        .contentEquals(byteArrayOf(1, 2, 3))
+                )
 
                 val newId = database.memeDao().insert(
-                    MemeEntity(fileName = "new.png", mediaType = "Image", mimeType = "image/png", addedAtMillis = 789, contentHash = "hash-c", storedFileName = "new-file")
+                    MemeEntity(
+                        fileName = "new.png",
+                        mediaType = "Image",
+                        mimeType = "image/png",
+                        addedAtMillis = 789,
+                        contentHash = "hash-c",
+                        storedFileName = "new-file"
+                    )
                 )
                 assertTrue(newId > memes.maxOf { it.id })
                 assertEquals(-1L, database.memeDao().insert(photo.copy(id = 0)))
@@ -93,12 +121,13 @@ class DatabaseMigrationsTest {
     @Test
     fun migratesEmptyDatabase() {
         helper.createDatabase(databaseName, 1).close()
-        helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2).use { database ->
-            database.query("SELECT COUNT(*) FROM memes").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(0, cursor.getInt(0))
+        helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2)
+            .use { database ->
+                database.query("SELECT COUNT(*) FROM memes").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
             }
-        }
     }
 
     @Test
@@ -107,20 +136,22 @@ class DatabaseMigrationsTest {
             execSQL("INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName) VALUES (7, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored')")
             close()
         }
-        helper.runMigrationsAndValidate(databaseName, 3, true, DatabaseMigrations.MIGRATION_2_3).use { database ->
-            database.query("SELECT id, fileName, contentHash, storedFileName, description FROM memes").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(7L, cursor.getLong(0))
-                assertEquals("cat.png", cursor.getString(1))
-                assertEquals("hash", cursor.getString(2))
-                assertEquals("stored", cursor.getString(3))
-                assertEquals("", cursor.getString(4))
+        helper.runMigrationsAndValidate(databaseName, 3, true, DatabaseMigrations.MIGRATION_2_3)
+            .use { database ->
+                database.query("SELECT id, fileName, contentHash, storedFileName, description FROM memes")
+                    .use { cursor ->
+                        assertTrue(cursor.moveToFirst())
+                        assertEquals(7L, cursor.getLong(0))
+                        assertEquals("cat.png", cursor.getString(1))
+                        assertEquals("hash", cursor.getString(2))
+                        assertEquals("stored", cursor.getString(3))
+                        assertEquals("", cursor.getString(4))
+                    }
+                database.query("SELECT COUNT(*) FROM tags").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
             }
-            database.query("SELECT COUNT(*) FROM tags").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(0, cursor.getInt(0))
-            }
-        }
     }
 
     @Test
@@ -129,16 +160,17 @@ class DatabaseMigrationsTest {
             execSQL("INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName, description) VALUES (5, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored', 'кот в капюшоне')")
             close()
         }
-        helper.runMigrationsAndValidate(databaseName, 4, true, DatabaseMigrations.MIGRATION_3_4).use { database ->
-            database.query("SELECT description FROM memes WHERE id = 5").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals("кот в капюшоне", cursor.getString(0))
+        helper.runMigrationsAndValidate(databaseName, 4, true, DatabaseMigrations.MIGRATION_3_4)
+            .use { database ->
+                database.query("SELECT description FROM memes WHERE id = 5").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("кот в капюшоне", cursor.getString(0))
+                }
+                database.query("SELECT COUNT(*) FROM text_embeddings").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
             }
-            database.query("SELECT COUNT(*) FROM text_embeddings").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(0, cursor.getInt(0))
-            }
-        }
     }
 
     @Test
@@ -147,15 +179,16 @@ class DatabaseMigrationsTest {
             execSQL("INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName, description) VALUES (9, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored', 'кот')")
             close()
         }
-        helper.runMigrationsAndValidate(databaseName, 5, true, DatabaseMigrations.MIGRATION_4_5).use { database ->
-            database.query("SELECT COUNT(*) FROM light_log_events").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(0, cursor.getInt(0))
+        helper.runMigrationsAndValidate(databaseName, 5, true, DatabaseMigrations.MIGRATION_4_5)
+            .use { database ->
+                database.query("SELECT COUNT(*) FROM light_log_events").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
+                database.query("SELECT description FROM memes WHERE id = 9").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("кот", cursor.getString(0))
+                }
             }
-            database.query("SELECT description FROM memes WHERE id = 9").use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals("кот", cursor.getString(0))
-            }
-        }
     }
 }

@@ -43,7 +43,12 @@ object AppLogger {
         if (BuildConfig.DEBUG) {
             val value = message()
             Log.e(ML_TAG, value, error)
-            store?.append(channel = "ml", level = "error", message = value, errorType = error.javaClass.simpleName)
+            store?.append(
+                channel = "ml",
+                level = "error",
+                message = value,
+                errorType = error.javaClass.simpleName
+            )
         }
     }
 
@@ -53,7 +58,7 @@ object AppLogger {
 }
 
 internal class DebugLogStore(context: Context) {
-    private val file = File(context.filesDir, "debug/events.jsonl")
+    private val file = File(context.filesDir, "debug/events.onl")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val writeLock = Mutex()
 

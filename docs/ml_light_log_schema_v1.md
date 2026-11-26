@@ -2,6 +2,8 @@
 
 Light Log включён по умолчанию и хранится только локально. Передача по сети не выполняется. Экспорт создаётся пользователем вручную в формате `events.jsonl.gz`.
 
+`events.jsonl` — это **JSON Lines (JSONL)**: каждая физическая строка файла является самостоятельным JSON-объектом. Файл не является одним JSON-объектом или массивом, поэтому его нужно открывать в режиме JSON Lines / NDJSON, а не проверять обычным JSON-валидатором.
+
 `schema_version` всегда равен `1`. Поля этой версии не переименовываются и не меняют смысл; несовместимые дополнения получают новую версию схемы.
 
 ## Диагностика логирования
@@ -20,12 +22,11 @@ Light Log включён по умолчанию и хранится тольк�
     "last_error_at_ms": 1764000000100
   }
 }
-[app-debug.apk](../app/build/outputs/apk/debug/app-debug.apk)
 ```
 
 При доступном хранилище сбой дополнительно создаёт событие:
 
-```json
+```json lines
 {
   "schema_version": 1,
   "record_type": "logging_error",
@@ -45,7 +46,7 @@ Light Log и его диагностика автономны: им не нуж�
 
 Первая строка — `export_header`:
 
-```json
+```json lines
 {
   "schema_version": 1,
   "record_type": "export_header",
@@ -75,7 +76,7 @@ Light Log и его диагностика автономны: им не нуж�
 
 `search_impression` записывается один раз после debounce и завершения поиска. Промежуточные символы при наборе не логируются. В `candidates` сохраняется не более 20 элементов.
 
-```json
+```json lines
 {
   "schema_version": 1,
   "record_type": "search_impression",
@@ -129,7 +130,7 @@ Light Log и его диагностика автономны: им не нуж�
 
 ## Действие по выдаче
 
-```json
+```json lines
 {
   "schema_version": 1,
   "record_type": "search_action",
@@ -153,7 +154,7 @@ Light Log и его диагностика автономны: им не нуж�
 
 На каждую пачку добавления записывается один `import_batch`, а на каждый выбранный файл — `import_item`:
 
-```json
+```json lines
 {
   "schema_version": 1,
   "record_type": "import_item",
@@ -168,12 +169,11 @@ Light Log и его диагностика автономны: им не нуж�
   "latency_ms": 84
 }
 ```
-[app-debug.apk](../app/build/outputs/apk/debug/app-debug.apk)
 Допустимые `source`: `gallery`, `files`, `share`. Допустимые `result`: `imported`, `duplicate`, `unsupported`, `source_unavailable`, `storage_error`.
 
 Импорт сам по себе не создаёт размеченный датасет. Пользовательская разметка фиксируется отдельным `meme_annotation` при каждом успешном сохранении описания или тегов:
 
-```json
+```json lines
 {
   "schema_version": 1,
   "record_type": "meme_annotation",

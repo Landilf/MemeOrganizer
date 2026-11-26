@@ -53,13 +53,15 @@ class DebugLogExporter @Inject constructor(
                 val metadata = StringBuilder()
                 memeDao.getAll().forEach { meme ->
                     val media = File(File(context.filesDir, "memes"), meme.storedFileName)
-                    metadata.append(JSONObject()
-                        .put("meme_id", meme.id)
-                        .put("file_hash", meme.contentHash)
-                        .put("file_name", meme.fileName)
-                        .put("mime_type", meme.mimeType)
-                        .put("included", media.isFile)
-                        .toString())
+                    metadata.append(
+                        JSONObject()
+                            .put("meme_id", meme.id)
+                            .put("file_hash", meme.contentHash)
+                            .put("file_name", meme.fileName)
+                            .put("mime_type", meme.mimeType)
+                            .put("included", media.isFile)
+                            .toString()
+                    )
                         .append('\n')
                     if (media.isFile) {
                         zip.putNextEntry(ZipEntry("media/${meme.contentHash}"))
@@ -96,9 +98,11 @@ class DebugLogExporter @Inject constructor(
             .put("app_version", BuildConfig.VERSION_NAME)
             .put("contains_media", containsMedia)
             .put("device_info", deviceInfo)
-            .put("model", JSONObject()
-                .put("release_tag", model?.releaseTag ?: JSONObject.NULL)
-                .put("onnx_sha256", model?.modelSha256 ?: JSONObject.NULL))
+            .put(
+                "model", JSONObject()
+                    .put("release_tag", model?.releaseTag ?: JSONObject.NULL)
+                    .put("onnx_sha256", model?.modelSha256 ?: JSONObject.NULL)
+            )
             .put("logging_health", lightLog.healthJson())
             .toString()
     }

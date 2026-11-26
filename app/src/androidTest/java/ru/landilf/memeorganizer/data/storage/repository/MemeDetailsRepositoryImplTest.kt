@@ -26,17 +26,36 @@ class MemeDetailsRepositoryImplTest {
     private lateinit var file: File
     private var id: Long = 0
 
-    @Before fun setUp() = runBlocking {
+    @Before
+    fun setUp() = runBlocking {
         context = ApplicationProvider.getApplicationContext()
         database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
-        repository = MemeDetailsRepositoryImpl(context, database, LightLogStore(context, database.lightLogDao()))
+        repository = MemeDetailsRepositoryImpl(
+            context,
+            database,
+            LightLogStore(context, database.lightLogDao())
+        )
         val directory = File(context.filesDir, "memes").apply { mkdirs() }
         file = File(directory, UUID.randomUUID().toString()).apply { writeText("media") }
-        id = database.memeDao().insert(MemeEntity(fileName = "cat.png", mediaType = "Image", mimeType = "image/png", addedAtMillis = 1, contentHash = "hash", storedFileName = file.name))
+        id = database.memeDao().insert(
+            MemeEntity(
+                fileName = "cat.png",
+                mediaType = "Image",
+                mimeType = "image/png",
+                addedAtMillis = 1,
+                contentHash = "hash",
+                storedFileName = file.name
+            )
+        )
     }
-    @After fun tearDown() { database.close(); file.delete() }
 
-    @Test fun savesAndReusesTagsAndKeepsUnusedTags() = runBlocking {
+    @After
+    fun tearDown() {
+        database.close(); file.delete()
+    }
+
+    @Test
+    fun savesAndReusesTagsAndKeepsUnusedTags() = runBlocking {
         repository.save(id, MemeDetails("Описание", listOf("Кот", "Смешной мем")))
         assertEquals(MemeDetails("Описание", listOf("Кот", "Смешной мем")), repository.load(id))
         repository.save(id, MemeDetails("Новое", listOf(" кот ")))
@@ -46,7 +65,8 @@ class MemeDetailsRepositoryImplTest {
         assertEquals(0, tags.getValue("Смешной мем").usageCount)
     }
 
-    @Test fun deletingMemeRemovesCopyAndLinksButKeepsTags() = runBlocking {
+    @Test
+    fun deletingMemeRemovesCopyAndLinksButKeepsTags() = runBlocking {
         repository.save(id, MemeDetails("", listOf("Кот")))
         repository.delete(setOf(id))
         assertFalse(file.exists())

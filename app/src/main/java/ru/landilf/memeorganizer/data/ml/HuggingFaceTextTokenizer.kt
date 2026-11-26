@@ -16,7 +16,8 @@ class HuggingFaceTextTokenizer private constructor(
     private var closed = false
 
     suspend fun encodeQuery(text: String): TokenizedText = encode(modelPackage.queryPrefix + text)
-    suspend fun encodePassage(text: String): TokenizedText = encode(modelPackage.passagePrefix + text)
+    suspend fun encodePassage(text: String): TokenizedText =
+        encode(modelPackage.passagePrefix + text)
 
     private suspend fun encode(text: String): TokenizedText = withContext(Dispatchers.Default) {
         lock.withLock {
@@ -33,13 +34,31 @@ class HuggingFaceTextTokenizer private constructor(
     }
 
     override fun close() {
-        kotlinx.coroutines.runBlocking { lock.withLock { if (!closed) { closed = true; tokenizer.close() } } }
+        kotlinx.coroutines.runBlocking {
+            lock.withLock {
+                if (!closed) {
+                    closed = true; tokenizer.close()
+                }
+            }
+        }
     }
 
     companion object {
-        suspend fun open(modelPackage: TextModelPackage): HuggingFaceTextTokenizer = withContext(Dispatchers.IO) {
-            val options = mapOf("addSpecialTokens" to "true", "padding" to "false", "truncation" to "true", "maxLength" to modelPackage.maxLength.toString(), "modelMaxLength" to modelPackage.maxLength.toString())
-            HuggingFaceTextTokenizer(HuggingFaceTokenizer.newInstance(modelPackage.tokenizerFile.toPath(), options), modelPackage)
-        }
+        suspend fun open(modelPackage: TextModelPackage): HuggingFaceTextTokenizer =
+            withContext(Dispatchers.IO) {
+                val options = mapOf(
+                    "addSpecialTokens" to "true",
+                    "padding" to "false",
+                    "truncation" to "true",
+                    "maxLength" to modelPackage.maxLength.toString(),
+                    "modelMaxLength" to modelPackage.maxLength.toString()
+                )
+                HuggingFaceTextTokenizer(
+                    HuggingFaceTokenizer.newInstance(
+                        modelPackage.tokenizerFile.toPath(),
+                        options
+                    ), modelPackage
+                )
+            }
     }
 }

@@ -32,7 +32,8 @@ class ImportViewModel @Inject constructor(
     private val importMemes: ImportMemesUseCase,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    private val _state = MutableStateFlow(ImportUiState(sources = savedStateHandle["sources"] ?: emptyList()))
+    private val _state =
+        MutableStateFlow(ImportUiState(sources = savedStateHandle["sources"] ?: emptyList()))
     val state = _state.asStateFlow()
 
     fun setSources(sources: List<String>) {
@@ -44,6 +45,7 @@ class ImportViewModel @Inject constructor(
     fun toggle(source: String) = _state.update {
         it.copy(selected = if (source in it.selected) it.selected - source else it.selected + source)
     }
+
     fun clearSelection() = _state.update { it.copy(selected = emptySet()) }
     fun selectAll() = _state.update { it.copy(selected = it.sources.toSet()) }
     fun remove(sources: Set<String>) {
@@ -51,6 +53,7 @@ class ImportViewModel @Inject constructor(
         savedStateHandle["sources"] = ArrayList(remaining)
         _state.update { it.copy(sources = remaining, selected = emptySet()) }
     }
+
     fun clearSummary() = _state.update { it.copy(summary = null) }
 
     fun startImport() {
@@ -65,20 +68,38 @@ class ImportViewModel @Inject constructor(
             try {
                 importMemes(sources).collect { progress ->
                     when (progress.latestResult) {
-                        is ImportResult.Imported -> { imported++; remaining.remove(progress.latestSource?.identifier) }
-                        is ImportResult.Duplicate -> { duplicates++; remaining.remove(progress.latestSource?.identifier) }
+                        is ImportResult.Imported -> {
+                            imported++; remaining.remove(progress.latestSource?.identifier)
+                        }
+
+                        is ImportResult.Duplicate -> {
+                            duplicates++; remaining.remove(progress.latestSource?.identifier)
+                        }
+
                         is ImportResult.Failed -> failed++
                         null -> Unit
                     }
                     _state.update { it.copy(completed = progress.completed) }
                 }
                 savedStateHandle["sources"] = ArrayList(remaining)
-                _state.update { it.copy(importing = false, sources = remaining.toList(), summary = ImportSummary.Completed(imported, duplicates, failed)) }
+                _state.update {
+                    it.copy(
+                        importing = false,
+                        sources = remaining.toList(),
+                        summary = ImportSummary.Completed(imported, duplicates, failed)
+                    )
+                }
             } catch (exception: kotlinx.coroutines.CancellationException) {
                 throw exception
             } catch (_: Exception) {
                 savedStateHandle["sources"] = ArrayList(remaining)
-                _state.update { it.copy(importing = false, sources = remaining.toList(), summary = ImportSummary.Interrupted(imported)) }
+                _state.update {
+                    it.copy(
+                        importing = false,
+                        sources = remaining.toList(),
+                        summary = ImportSummary.Interrupted(imported)
+                    )
+                }
             }
         }
     }

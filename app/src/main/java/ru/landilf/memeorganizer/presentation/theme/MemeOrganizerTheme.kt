@@ -32,6 +32,13 @@ private val AppShapes = Shapes(
 )
 
 @Composable
-fun MemeOrganizerTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (darkTheme) DarkColors else LightColors, shapes = AppShapes, content = content)
+fun MemeOrganizerTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    content: @Composable () -> Unit
+) {
+    MaterialTheme(
+        colorScheme = if (darkTheme) DarkColors else LightColors,
+        shapes = AppShapes,
+        content = content
+    )
 }

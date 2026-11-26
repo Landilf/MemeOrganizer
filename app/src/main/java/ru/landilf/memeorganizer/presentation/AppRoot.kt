@@ -82,7 +82,11 @@ fun AppRoot() {
     val modelUpdateViewModel: ModelUpdateViewModel = hiltViewModel()
     val modelUpdateState by modelUpdateViewModel.state.collectAsStateWithLifecycle()
     MemeOrganizerTheme {
-        ModelUpdateDialog(modelUpdateState, modelUpdateViewModel::install, modelUpdateViewModel::postpone)
+        ModelUpdateDialog(
+            modelUpdateState,
+            modelUpdateViewModel::install,
+            modelUpdateViewModel::postpone
+        )
         NavHost(navController = navController, startDestination = "library") {
             composable("library") {
                 val libraryViewModel: LibraryViewModel = hiltViewModel()
@@ -90,7 +94,11 @@ fun AppRoot() {
                 MainTabsScreen(
                     onSettingsClick = { navController.navigate("settings") },
                     onSearchClick = { navController.navigate("search") },
-                    onFilesSelected = { sources -> importViewModel.setSources(sources); navController.navigate("import") },
+                    onFilesSelected = { sources ->
+                        importViewModel.setSources(sources); navController.navigate(
+                        "import"
+                    )
+                    },
                     memes = memes,
                     libraryViewModel = libraryViewModel,
                     summary = importState.summary,
@@ -116,7 +124,9 @@ fun AppRoot() {
             composable(
                 route = "viewer/{memeId}?searchId={searchId}&rank={rank}&impressionAtMs={impressionAtMs}",
                 arguments = listOf(
-                    navArgument("searchId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("searchId") {
+                        type = NavType.StringType; nullable = true; defaultValue = null
+                    },
                     navArgument("rank") { type = NavType.IntType; defaultValue = -1 },
                     navArgument("impressionAtMs") { type = NavType.LongType; defaultValue = -1L }
                 )
@@ -142,27 +152,53 @@ fun AppRoot() {
             composable("settings") {
                 val modelViewModel: ModelSettingsViewModel = hiltViewModel()
                 val modelStatus by modelViewModel.status.collectAsStateWithLifecycle()
-                val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-                    if (uri != null) modelViewModel.install(uri)
-                }
+                val modelPicker =
+                    rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                        if (uri != null) modelViewModel.install(uri)
+                    }
                 Scaffold(topBar = {
                     TopAppBar(title = {}, navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_button))
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back_button)
+                            )
                         }
                     })
                 }) { padding ->
                     Column(modifier = Modifier.padding(padding).padding(24.dp)) {
-                        Text(stringResource(R.string.settings_text_model), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(when (modelStatus) {
-                            ModelStatus.Checking -> R.string.settings_model_checking
-                            ModelStatus.NotInstalled -> R.string.settings_model_not_installed
-                            ModelStatus.Installing -> R.string.settings_model_installing
-                            ModelStatus.Installed -> R.string.settings_model_installed
-                            ModelStatus.Error -> R.string.settings_model_error
-                        }))
-                        if (modelStatus == ModelStatus.Installing || modelStatus == ModelStatus.Checking) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        Button(onClick = { modelPicker.launch(arrayOf("application/gzip", "application/x-gzip", "application/octet-stream", "application/x-tar", "*/*")) }, enabled = modelStatus != ModelStatus.Installing && modelStatus != ModelStatus.Checking) {
+                        Text(
+                            stringResource(R.string.settings_text_model),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            stringResource(
+                                when (modelStatus) {
+                                    ModelStatus.Checking -> R.string.settings_model_checking
+                                    ModelStatus.NotInstalled -> R.string.settings_model_not_installed
+                                    ModelStatus.Installing -> R.string.settings_model_installing
+                                    ModelStatus.Installed -> R.string.settings_model_installed
+                                    ModelStatus.Error -> R.string.settings_model_error
+                                }
+                            )
+                        )
+                        if (modelStatus == ModelStatus.Installing || modelStatus == ModelStatus.Checking) LinearProgressIndicator(
+                            Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = {
+                                modelPicker.launch(
+                                    arrayOf(
+                                        "application/gzip",
+                                        "application/x-gzip",
+                                        "application/octet-stream",
+                                        "application/x-tar",
+                                        "*/*"
+                                    )
+                                )
+                            },
+                            enabled = modelStatus != ModelStatus.Installing && modelStatus != ModelStatus.Checking
+                        ) {
                             Text(stringResource(R.string.settings_model_choose))
                         }
                         TextButton(
@@ -192,7 +228,9 @@ fun AppRoot() {
                 }
             }
             composable("components") {
-                ComponentGallery(initialDark = isSystemInDarkTheme(), onBack = { navController.popBackStack() })
+                ComponentGallery(
+                    initialDark = isSystemInDarkTheme(),
+                    onBack = { navController.popBackStack() })
             }
             composable("developer") {
                 val developerViewModel: DeveloperViewModel = hiltViewModel()
@@ -221,7 +259,8 @@ private fun MainTabsScreen(
     onSummaryShown: () -> Unit
 ) {
     val tabs = MainTab.entries
-    val pagerState = rememberPagerState(initialPage = MainTab.Home.ordinal, pageCount = { tabs.size })
+    val pagerState =
+        rememberPagerState(initialPage = MainTab.Home.ordinal, pageCount = { tabs.size })
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -230,7 +269,14 @@ private fun MainTabsScreen(
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
-    if (deleteError) AlertDialog(onDismissRequest = libraryViewModel::clearDeleteError, title = { Text(stringResource(R.string.library_delete_error)) }, confirmButton = { TextButton(onClick = libraryViewModel::clearDeleteError) { Text(stringResource(R.string.ok_button)) } })
+    if (deleteError) AlertDialog(
+        onDismissRequest = libraryViewModel::clearDeleteError,
+        title = { Text(stringResource(R.string.library_delete_error)) },
+        confirmButton = {
+            TextButton(onClick = libraryViewModel::clearDeleteError) {
+                Text(stringResource(R.string.ok_button))
+            }
+        })
     if (openedId != null) {
         LaunchedEffect(openedId) { snackbar.currentSnackbarData?.dismiss() }
         LibraryViewer(memes, openedId!!, libraryViewModel, onBack = { openedId = null })
@@ -241,18 +287,38 @@ private fun MainTabsScreen(
         onDismissRequest = { confirmDelete = false },
         title = { Text(stringResource(R.string.library_delete_title)) },
         text = { Text(stringResource(R.string.library_delete_message)) },
-        dismissButton = { TextButton(onClick = { libraryViewModel.delete(selected); selected = emptySet(); confirmDelete = false }) { Text(stringResource(R.string.yes_button)) } },
-        confirmButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.no_button)) } }
+        dismissButton = {
+            TextButton(onClick = {
+                libraryViewModel.delete(selected); selected = emptySet(); confirmDelete = false
+            }) { Text(stringResource(R.string.yes_button)) }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                confirmDelete = false
+            }) { Text(stringResource(R.string.no_button)) }
+        }
     )
     fun acceptUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         uris.forEach { uri ->
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
         }
         onFilesSelected(uris.map(Uri::toString))
     }
-    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { acceptUris(it) }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { acceptUris(it) }
+
+    val galleryPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) {
+            acceptUris(it)
+        }
+    val filePicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
+            acceptUris(it)
+        }
     val summaryText = summary?.asText()
     LaunchedEffect(summaryText) {
         if (summaryText != null) {
@@ -265,13 +331,24 @@ private fun MainTabsScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(title = {}, actions = {
-                if (selected.isNotEmpty()) Text(stringResource(R.string.import_selected_count, selected.size), Modifier.padding(end = 20.dp))
+                if (selected.isNotEmpty()) Text(
+                    stringResource(
+                        R.string.import_selected_count,
+                        selected.size
+                    ), Modifier.padding(end = 20.dp)
+                )
                 else {
                     IconButton(onClick = onSearchClick) {
-                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search_open))
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = stringResource(R.string.search_open)
+                        )
                     }
                     IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_open))
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = stringResource(R.string.settings_open)
+                        )
                     }
                 }
             })
@@ -279,8 +356,20 @@ private fun MainTabsScreen(
         bottomBar = {
             if (selected.isNotEmpty()) BottomAppBar {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    TextButton(onClick = { selected = memes.map { it.id }.toSet() }) { Icon(Icons.Default.SelectAll, null); Text(stringResource(R.string.import_select_all)) }
-                    TextButton(onClick = { confirmDelete = true }) { Icon(Icons.Default.Delete, null); Text(stringResource(R.string.import_delete)) }
+                    TextButton(onClick = {
+                        selected = memes.map { it.id }.toSet()
+                    }) {
+                        Icon(
+                            Icons.Default.SelectAll,
+                            null
+                        ); Text(stringResource(R.string.import_select_all))
+                    }
+                    TextButton(onClick = { confirmDelete = true }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            null
+                        ); Text(stringResource(R.string.import_delete))
+                    }
                 }
             } else NavigationBar {
                 tabs.forEachIndexed { index, tab ->
@@ -296,30 +385,66 @@ private fun MainTabsScreen(
         floatingActionButton = {
             if (tabs[pagerState.currentPage] == MainTab.Home && selected.isEmpty()) {
                 Box {
-                    FloatingActionButton(onClick = { menuExpanded = !menuExpanded }) { Icon(Icons.Default.Add, stringResource(R.string.library_add)) }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(text = { Text(stringResource(R.string.library_import_gallery)) }, leadingIcon = { Icon(Icons.Default.PhotoLibrary, null) }, onClick = {
-                            menuExpanded = false
-                            galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                        })
-                        DropdownMenuItem(text = { Text(stringResource(R.string.library_import_files)) }, leadingIcon = { Icon(Icons.Default.FolderOpen, null) }, onClick = {
-                            menuExpanded = false
-                            filePicker.launch(arrayOf("image/*", "video/*"))
-                        })
+                    FloatingActionButton(onClick = {
+                        menuExpanded = !menuExpanded
+                    }) { Icon(Icons.Default.Add, stringResource(R.string.library_add)) }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.library_import_gallery)) },
+                            leadingIcon = { Icon(Icons.Default.PhotoLibrary, null) },
+                            onClick = {
+                                menuExpanded = false
+                                galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                            })
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.library_import_files)) },
+                            leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
+                            onClick = {
+                                menuExpanded = false
+                                filePicker.launch(arrayOf("image/*", "video/*"))
+                            })
                     }
                 }
             }
         }
     ) { padding ->
-        HorizontalPager(state = pagerState, userScrollEnabled = selected.isEmpty(), modifier = Modifier.fillMaxSize().padding(padding)) { page ->
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = selected.isEmpty(),
+            modifier = Modifier.fillMaxSize().padding(padding)
+        ) { page ->
             if (tabs[page] == MainTab.Home && memes.isNotEmpty()) {
-                LazyVerticalGrid(modifier = Modifier.fillMaxSize(), columns = GridCells.Fixed(3), contentPadding = PaddingValues(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyVerticalGrid(
+                    modifier = Modifier.fillMaxSize(),
+                    columns = GridCells.Fixed(3),
+                    contentPadding = PaddingValues(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     items(memes, key = { it.id }) { meme ->
-                        Box(Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(onLongClick = { selected = selected + meme.id }, onClick = {
-                            if (selected.isEmpty()) openedId = meme.id else selected = if (meme.id in selected) selected - meme.id else selected + meme.id
-                        })) {
-                            MediaThumbnail(Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")), meme.mimeType, Modifier.fillMaxSize())
-                            if (meme.id in selected) Checkbox(true, { selected = selected - meme.id }, modifier = Modifier.align(Alignment.TopEnd))
+                        Box(
+                            Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(
+                                onLongClick = { selected = selected + meme.id },
+                                onClick = {
+                                    if (selected.isEmpty()) openedId = meme.id else selected =
+                                        if (meme.id in selected) selected - meme.id else selected + meme.id
+                                })
+                        ) {
+                            MediaThumbnail(
+                                Uri.fromFile(
+                                    File(
+                                        context.filesDir,
+                                        "memes/${meme.storedFileName}"
+                                    )
+                                ), meme.mimeType, Modifier.fillMaxSize()
+                            )
+                            if (meme.id in selected) Checkbox(
+                                true,
+                                { selected = selected - meme.id },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            )
                         }
                     }
                 }
@@ -328,9 +453,15 @@ private fun MainTabsScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(stringResource(tabs[page].message), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    stringResource(tabs[page].message),
+                    style = MaterialTheme.typography.titleLarge
+                )
                 if (tabs[page] == MainTab.Home) {
-                    Text(stringResource(R.string.library_add_hint), style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        stringResource(R.string.library_add_hint),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
             }
         }

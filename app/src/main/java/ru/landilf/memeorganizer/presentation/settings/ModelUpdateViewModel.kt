@@ -26,11 +26,14 @@ data class ModelUpdateUiState(
 )
 
 @HiltViewModel
-class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelUpdater) : ViewModel() {
+class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelUpdater) :
+    ViewModel() {
     private val _state = MutableStateFlow(ModelUpdateUiState())
     val state = _state.asStateFlow()
 
-    init { checkForUpdates(manual = false) }
+    init {
+        checkForUpdates(manual = false)
+    }
 
     fun checkForUpdates(manual: Boolean = true) {
         if (_state.value.checking || _state.value.progress != null) return
@@ -38,15 +41,37 @@ class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelU
         viewModelScope.launch {
             try {
                 when (val result = updater.checkForUpdate(manual)) {
-                    is ModelUpdateCheck.Available -> _state.update { it.copy(checking = false, available = result.release) }
-                    ModelUpdateCheck.UpToDate -> _state.update { it.copy(checking = false, notice = if (manual) ModelUpdateNotice.UpToDate else ModelUpdateNotice.None) }
-                    ModelUpdateCheck.Offline -> _state.update { it.copy(checking = false, notice = if (manual) ModelUpdateNotice.Offline else ModelUpdateNotice.None) }
+                    is ModelUpdateCheck.Available -> _state.update {
+                        it.copy(
+                            checking = false,
+                            available = result.release
+                        )
+                    }
+
+                    ModelUpdateCheck.UpToDate -> _state.update {
+                        it.copy(
+                            checking = false,
+                            notice = if (manual) ModelUpdateNotice.UpToDate else ModelUpdateNotice.None
+                        )
+                    }
+
+                    ModelUpdateCheck.Offline -> _state.update {
+                        it.copy(
+                            checking = false,
+                            notice = if (manual) ModelUpdateNotice.Offline else ModelUpdateNotice.None
+                        )
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 AppLogger.mlError(error) { "update.check.failed" }
-                _state.update { it.copy(checking = false, notice = if (manual) ModelUpdateNotice.Error else ModelUpdateNotice.None) }
+                _state.update {
+                    it.copy(
+                        checking = false,
+                        notice = if (manual) ModelUpdateNotice.Error else ModelUpdateNotice.None
+                    )
+                }
             }
         }
     }
@@ -58,11 +83,24 @@ class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelU
 
     fun install(release: ModelRelease) {
         if (_state.value.progress != null) return
-        _state.update { it.copy(progress = ModelDownloadProgress.Downloading(0, release.archiveSizeBytes), notice = ModelUpdateNotice.None) }
+        _state.update {
+            it.copy(
+                progress = ModelDownloadProgress.Downloading(
+                    0,
+                    release.archiveSizeBytes
+                ), notice = ModelUpdateNotice.None
+            )
+        }
         viewModelScope.launch {
             try {
                 updater.downloadAndInstall(release) { progress -> _state.update { it.copy(progress = progress) } }
-                _state.update { it.copy(available = null, progress = null, notice = ModelUpdateNotice.Installed) }
+                _state.update {
+                    it.copy(
+                        available = null,
+                        progress = null,
+                        notice = ModelUpdateNotice.Installed
+                    )
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: ModelUpdateOfflineException) {

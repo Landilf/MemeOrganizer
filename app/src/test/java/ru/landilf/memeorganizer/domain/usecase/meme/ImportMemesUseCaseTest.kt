@@ -18,7 +18,8 @@ import java.time.Instant
 class ImportMemesUseCaseTest {
     @Test
     fun `reports progress and continues after a duplicate and an expected failure`() = runTest {
-        val meme = Meme(1L, "meme.png", MemeMediaType.Image, "image/png", Instant.EPOCH, "hash", "file")
+        val meme =
+            Meme(1L, "meme.png", MemeMediaType.Image, "image/png", Instant.EPOCH, "hash", "file")
         val results = listOf(
             ImportResult.Imported(meme),
             ImportResult.Duplicate(meme),
@@ -47,7 +48,8 @@ class ImportMemesUseCaseTest {
     fun `empty batch reports zero progress without importing`() = runTest {
         val repository = object : MemeRepository {
             override fun observeMemes() = flowOf(emptyList<Meme>())
-            override suspend fun importMeme(source: ImportSource): ImportResult = error("Unexpected import")
+            override suspend fun importMeme(source: ImportSource): ImportResult =
+                error("Unexpected import")
         }
 
         val progress = ImportMemesUseCase(repository)(emptyList()).toList()

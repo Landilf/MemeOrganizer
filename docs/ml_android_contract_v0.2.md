@@ -317,10 +317,12 @@ ORDER BY v.distance ASC;
 
 ### 5.3. Схема записей в `events.jsonl` (раздельные `search_impression` и `search_action`)
 
+`events.jsonl` использует формат **JSON Lines (JSONL)**: каждая строка — отдельный JSON-объект, а не элемент одного JSON-массива.
+
 Выдача и каждое последующее действие пользователя (открыл несколько результатов → вернулся → скопировал один) пишутся **отдельными событиями**, связанными общим `search_id`. Промежуточные префиксы при наборе (`"ф"`, `"фи"`) не логируются — только завершённый запрос после debounce.
 
 **1. Заголовок экспорта (1-я строка файла):**
-```json
+```json lines
 {
   "record_type": "export_header",
   "exported_at_ms": 1763880100000,
@@ -338,7 +340,7 @@ ORDER BY v.distance ASC;
 ```
 
 **2. Показ выдачи (`search_impression` — 1 запись на запрос):**
-```json
+```json lines
 {
   "record_type": "search_impression",
   "search_id": "uuid-search",
@@ -362,7 +364,7 @@ ORDER BY v.distance ASC;
 ```
 
 **3. Действие пользователя (`search_action` — 0..N записей на один `search_id`):**
-```json
+```json lines
 {
   "record_type": "search_action",
   "search_id": "uuid-search",
@@ -377,7 +379,7 @@ ORDER BY v.distance ASC;
 *Значения `action_type`: `open`, `copy`, `share`, `favorite`, `reformulate`, `abandon`.*
 
 **4. Событие индексации (`indexing_event` — диагностика производительности и OOM):**
-```json
+```json lines
 {
   "record_type": "indexing_event",
   "event_id": "uuid-v4",

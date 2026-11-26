@@ -62,7 +62,10 @@ class MemeRepositoryImplTest {
         assertTrue((first as ImportResult.Imported).meme.id > 0)
         assertEquals(stored.single().id, first.meme.id)
         assertEquals(stored.single().storedFileName, first.meme.storedFileName)
-        assertTrue(File(context.filesDir, "memes/${stored.single().storedFileName}").readBytes().contentEquals(sourceFile.readBytes()))
+        assertTrue(
+            File(context.filesDir, "memes/${stored.single().storedFileName}").readBytes()
+                .contentEquals(sourceFile.readBytes())
+        )
         assertEquals(stored.single().id, (second as ImportResult.Duplicate).existingMeme.id)
     }
 

@@ -33,7 +33,13 @@ class LightLogStore @Inject constructor(
                 .put("timestamp_ms", timestamp)
             val health = readHealth().apply { created++ }
             try {
-                events.insert(LightLogEventEntity(timestampMs = timestamp, recordType = recordType, payloadJson = event.toString()))
+                events.insert(
+                    LightLogEventEntity(
+                        timestampMs = timestamp,
+                        recordType = recordType,
+                        payloadJson = event.toString()
+                    )
+                )
                 health.pruned += events.trimTo(MAX_EVENTS)
                 health.persisted++
                 health.lastSuccessAtMs = timestamp
@@ -61,14 +67,23 @@ class LightLogStore @Inject constructor(
     }
 
     private fun readHealth(): Health = try {
-        if (!healthFile.baseFile.isFile) Health() else Health.fromJson(JSONObject(healthFile.readFully().toString(Charsets.UTF_8)))
-    } catch (_: Exception) { Health() }
+        if (!healthFile.baseFile.isFile) Health() else Health.fromJson(
+            JSONObject(
+                healthFile.readFully().toString(Charsets.UTF_8)
+            )
+        )
+    } catch (_: Exception) {
+        Health()
+    }
 
     private fun writeHealth(health: Health) {
         healthFile.baseFile.parentFile?.mkdirs()
         val output = healthFile.startWrite()
-        try { output.write(health.toJson().toString().toByteArray()); healthFile.finishWrite(output) }
-        catch (error: Exception) { healthFile.failWrite(output); throw error }
+        try {
+            output.write(health.toJson().toString().toByteArray()); healthFile.finishWrite(output)
+        } catch (error: Exception) {
+            healthFile.failWrite(output); throw error
+        }
     }
 
     private fun persistHealthSafely(health: Health) {
@@ -107,5 +122,7 @@ class LightLogStore @Inject constructor(
         }
     }
 
-    private companion object { const val MAX_EVENTS = 10_000 }
+    private companion object {
+        const val MAX_EVENTS = 10_000
+    }
 }

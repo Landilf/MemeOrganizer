@@ -27,11 +27,14 @@ class MemeDetailsRepositoryImpl @Inject constructor(
     private val memes get() = database.memeDao()
     private val tags get() = database.tagDao()
 
-    override fun observeTags() = tags.observeTags().map { list -> list.map { TagSuggestion(it.name, it.usageCount) } }
+    override fun observeTags() =
+        tags.observeTags().map { list -> list.map { TagSuggestion(it.name, it.usageCount) } }
+
     override suspend fun load(memeId: Long): MemeDetails = database.withTransaction {
         val meme = requireNotNull(memes.getById(memeId))
         MemeDetails(meme.description, tags.getMemeTags(memeId))
     }
+
     override suspend fun save(memeId: Long, details: MemeDetails) {
         val normalizedTags = details.tags.map(String::trim)
         val hash = database.withTransaction {
@@ -42,7 +45,12 @@ class MemeDetailsRepositoryImpl @Inject constructor(
             normalizedTags.forEach { name ->
                 val normalized = MemeTextRules.normalizeTag(name)
                 val existing = tags.findByName(normalized)
-                val id = existing?.id ?: tags.insertTag(TagEntity(name = name, normalizedName = normalized)).let {
+                val id = existing?.id ?: tags.insertTag(
+                    TagEntity(
+                        name = name,
+                        normalizedName = normalized
+                    )
+                ).let {
                     if (it == -1L) requireNotNull(tags.findByName(normalized)).id else it
                 }
                 tags.insertLink(MemeTagEntity(memeId, id))
@@ -58,6 +66,7 @@ class MemeDetailsRepositoryImpl @Inject constructor(
                 .put("annotation_source", "user")
         )
     }
+
     override suspend fun delete(memeIds: Set<Long>) = withContext(Dispatchers.IO) {
         for (id in memeIds) {
             val meme = memes.getById(id) ?: continue

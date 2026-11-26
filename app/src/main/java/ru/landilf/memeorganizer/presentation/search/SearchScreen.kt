@@ -36,17 +36,32 @@ import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(state: SearchUiState, onQueryChanged: (String) -> Unit, onBack: () -> Unit, onMemeClick: (MemeSearchResult) -> Unit) {
+fun SearchScreen(
+    state: SearchUiState,
+    onQueryChanged: (String) -> Unit,
+    onBack: () -> Unit,
+    onMemeClick: (MemeSearchResult) -> Unit
+) {
     val context = LocalContext.current
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(stringResource(R.string.search_title)) },
-            navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back_button)) } }
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        stringResource(R.string.back_button)
+                    )
+                }
+            }
         )
     }) { padding ->
         if (!state.modelAvailable && !state.preparing) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.search_model_not_installed), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.search_model_not_installed),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
             return@Scaffold
         }
@@ -66,20 +81,46 @@ fun SearchScreen(state: SearchUiState, onQueryChanged: (String) -> Unit, onBack:
                     singleLine = true
                 )
             }
-            if (state.preparing) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            if (state.preparing) item(span = {
+                androidx.compose.foundation.lazy.grid.GridItemSpan(
+                    maxLineSpan
+                )
+            }) {
+                Box(
+                    Modifier.fillMaxWidth().padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) { CircularProgressIndicator() }
             }
-            if (state.error) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                Text(stringResource(R.string.search_error), Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
+            if (state.error) item(span = {
+                androidx.compose.foundation.lazy.grid.GridItemSpan(
+                    maxLineSpan
+                )
+            }) {
+                Text(
+                    stringResource(R.string.search_error),
+                    Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
-            if (!state.preparing && !state.error && state.query.isNotBlank() && state.results.isEmpty()) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                Text(stringResource(R.string.search_empty), Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge)
+            if (!state.preparing && !state.error && state.query.isNotBlank() && state.results.isEmpty()) item(
+                span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                Text(
+                    stringResource(R.string.search_empty),
+                    Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodyLarge
+                )
             }
             items(state.results, key = { it.meme.id }) { result ->
                 MediaThumbnail(
-                    uri = Uri.fromFile(File(context.filesDir, "memes/${result.meme.storedFileName}")),
+                    uri = Uri.fromFile(
+                        File(
+                            context.filesDir,
+                            "memes/${result.meme.storedFileName}"
+                        )
+                    ),
                     mimeType = result.meme.mimeType,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onMemeClick(result) }
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                        .clickable { onMemeClick(result) }
                 )
             }
         }

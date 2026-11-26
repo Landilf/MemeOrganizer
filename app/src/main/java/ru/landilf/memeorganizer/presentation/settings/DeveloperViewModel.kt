@@ -43,7 +43,9 @@ class DeveloperViewModel @Inject constructor(
         _status.value = DebugExportStatus.Exporting
         viewModelScope.launch {
             try {
-                if (includeMedia) exporter.exportFullBundle(destination) else exporter.exportLogs(destination)
+                if (includeMedia) exporter.exportFullBundle(destination) else exporter.exportLogs(
+                    destination
+                )
                 _status.value = DebugExportStatus.ExportSuccess
             } catch (error: CancellationException) {
                 throw error
@@ -54,7 +56,9 @@ class DeveloperViewModel @Inject constructor(
         }
     }
 
-    fun clearStatus() { _status.update { DebugExportStatus.Idle } }
+    fun clearStatus() {
+        _status.update { DebugExportStatus.Idle }
+    }
 
     fun clearLogs() {
         if (_status.value.isBusy()) return

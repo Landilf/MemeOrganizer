@@ -20,9 +20,13 @@ class OnnxTextEncoderTest {
     fun tokenizerMatchesSmokeTokens() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val directory = File(context.filesDir, "models/text-champion")
-        assumeTrue("Place the extracted model bundle in ${directory.absolutePath}", File(directory, "preset_manifest.json").isFile)
+        assumeTrue(
+            "Place the extracted model bundle in ${directory.absolutePath}",
+            File(directory, "preset_manifest.json").isFile
+        )
         val modelPackage = TextModelPackage.load(directory)
-        val samples = JSONObject(File(directory, "smoke_test_pack.json").readText()).getJSONArray("samples")
+        val samples =
+            JSONObject(File(directory, "smoke_test_pack.json").readText()).getJSONArray("samples")
         val tokenizer = HuggingFaceTextTokenizer.open(modelPackage)
         try {
             for (index in 0 until samples.length()) {
@@ -30,18 +34,34 @@ class OnnxTextEncoderTest {
                 val input = sample.getJSONArray("input_ids")
                 val mask = sample.getJSONArray("attention_mask")
                 val text = sample.getString("raw_text")
-                val tokens = if (sample.getString("text_type") == "query") tokenizer.encodeQuery(text) else tokenizer.encodePassage(text)
-                assertArrayEquals("Token IDs: ${sample.getString("sample_id")}", LongArray(input.length()) { input.getLong(it) }, tokens.inputIds)
-                assertArrayEquals("Attention mask: ${sample.getString("sample_id")}", LongArray(mask.length()) { mask.getLong(it) }, tokens.attentionMask)
+                val tokens =
+                    if (sample.getString("text_type") == "query") tokenizer.encodeQuery(text) else tokenizer.encodePassage(
+                        text
+                    )
+                assertArrayEquals(
+                    "Token IDs: ${sample.getString("sample_id")}",
+                    LongArray(input.length()) { input.getLong(it) },
+                    tokens.inputIds
+                )
+                assertArrayEquals(
+                    "Attention mask: ${sample.getString("sample_id")}",
+                    LongArray(mask.length()) { mask.getLong(it) },
+                    tokens.attentionMask
+                )
             }
-        } finally { tokenizer.close() }
+        } finally {
+            tokenizer.close()
+        }
     }
 
     @Test
     fun matchesOnnxSmokeVectors() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val directory = File(context.filesDir, "models/text-champion")
-        assumeTrue("Place the extracted model bundle in ${directory.absolutePath}", File(directory, "preset_manifest.json").isFile)
+        assumeTrue(
+            "Place the extracted model bundle in ${directory.absolutePath}",
+            File(directory, "preset_manifest.json").isFile
+        )
         val modelPackage = TextModelPackage.load(directory)
         val smoke = JSONObject(File(directory, "smoke_test_pack.json").readText())
         val samples = smoke.getJSONArray("samples")
@@ -55,10 +75,24 @@ class OnnxTextEncoderTest {
                 val mask = sample.getJSONArray("attention_mask")
                 val expected = sample.getJSONArray("full_embedding")
                 val text = sample.getString("raw_text")
-                val tokens = if (sample.getString("text_type") == "query") tokenizer.encodeQuery(text) else tokenizer.encodePassage(text)
-                assertArrayEquals("Token IDs: ${sample.getString("sample_id")}", LongArray(input.length()) { input.getLong(it) }, tokens.inputIds)
-                assertArrayEquals("Attention mask: ${sample.getString("sample_id")}", LongArray(mask.length()) { mask.getLong(it) }, tokens.attentionMask)
-                val result = if (sample.getString("text_type") == "query") encoder.encodeQuery(text) else encoder.encodePassage(text)
+                val tokens =
+                    if (sample.getString("text_type") == "query") tokenizer.encodeQuery(text) else tokenizer.encodePassage(
+                        text
+                    )
+                assertArrayEquals(
+                    "Token IDs: ${sample.getString("sample_id")}",
+                    LongArray(input.length()) { input.getLong(it) },
+                    tokens.inputIds
+                )
+                assertArrayEquals(
+                    "Attention mask: ${sample.getString("sample_id")}",
+                    LongArray(mask.length()) { mask.getLong(it) },
+                    tokens.attentionMask
+                )
+                val result =
+                    if (sample.getString("text_type") == "query") encoder.encodeQuery(text) else encoder.encodePassage(
+                        text
+                    )
                 assertEquals(modelPackage.dimension, result.size)
                 var dot = 0.0
                 var actualNorm = 0.0
@@ -84,7 +118,10 @@ class OnnxTextEncoderTest {
     fun preservesSmokeRankingWithReferenceBm25Scores() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val directory = File(context.filesDir, "models/text-champion")
-        assumeTrue("Place the extracted model bundle in ${directory.absolutePath}", File(directory, "preset_manifest.json").isFile)
+        assumeTrue(
+            "Place the extracted model bundle in ${directory.absolutePath}",
+            File(directory, "preset_manifest.json").isFile
+        )
         val smoke = JSONObject(File(directory, "smoke_test_pack.json").readText())
         val encoder = TextEmbeddingEngine.open(TextModelPackage.load(directory))
         val vectors = mutableMapOf<String, FloatArray>()
@@ -93,11 +130,18 @@ class OnnxTextEncoderTest {
             for (index in 0 until samples.length()) {
                 val sample = samples.getJSONObject(index)
                 val text = sample.getString("raw_text")
-                vectors[sample.getString("sample_id")] = if (sample.getString("text_type") == "query") encoder.encodeQuery(text) else encoder.encodePassage(text)
+                vectors[sample.getString("sample_id")] =
+                    if (sample.getString("text_type") == "query") encoder.encodeQuery(text) else encoder.encodePassage(
+                        text
+                    )
             }
-        } finally { encoder.close() }
+        } finally {
+            encoder.close()
+        }
 
-        fun similarity(a: FloatArray, b: FloatArray): Double = a.indices.sumOf { a[it].toDouble() * b[it] }
+        fun similarity(a: FloatArray, b: FloatArray): Double =
+            a.indices.sumOf { a[it].toDouble() * b[it] }
+
         fun normalize(values: List<Double>): List<Double> {
             val min = values.min()
             val range = values.max() - min
@@ -105,10 +149,15 @@ class OnnxTextEncoderTest {
         }
 
         val pairs = smoke.getJSONArray("similarity_tests")
-        val expectedPairs = (0 until pairs.length()).sortedByDescending { pairs.getJSONObject(it).getDouble("expected_cosine_similarity") }
+        val expectedPairs = (0 until pairs.length()).sortedByDescending {
+            pairs.getJSONObject(it).getDouble("expected_cosine_similarity")
+        }
         val actualPairs = (0 until pairs.length()).sortedByDescending {
             val pair = pairs.getJSONObject(it)
-            similarity(vectors.getValue(pair.getString("query_id")), vectors.getValue(pair.getString("passage_id")))
+            similarity(
+                vectors.getValue(pair.getString("query_id")),
+                vectors.getValue(pair.getString("passage_id"))
+            )
         }
         assertEquals("Similarity pair ordering", expectedPairs, actualPairs)
 
@@ -125,7 +174,11 @@ class OnnxTextEncoderTest {
                 test.getDouble("dense_weight") * dense[it] + test.getDouble("bm25_weight") * lexical[it]
             }.map { names[it] }
             val expected = test.getJSONArray("expected_ranking")
-            assertEquals("Hybrid ranking: ${test.getString("query_id")}", (0 until expected.length()).map { expected.getString(it) }, actual)
+            assertEquals(
+                "Hybrid ranking: ${test.getString("query_id")}",
+                (0 until expected.length()).map { expected.getString(it) },
+                actual
+            )
         }
     }
 }

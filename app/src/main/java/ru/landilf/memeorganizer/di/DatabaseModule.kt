@@ -21,14 +21,20 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, "meme_organizer.db")
-            .addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_2_3, DatabaseMigrations.MIGRATION_3_4, DatabaseMigrations.MIGRATION_4_5)
+            .addMigrations(
+                DatabaseMigrations.MIGRATION_1_2,
+                DatabaseMigrations.MIGRATION_2_3,
+                DatabaseMigrations.MIGRATION_3_4,
+                DatabaseMigrations.MIGRATION_4_5
+            )
             .build()
 
     @Provides
     fun provideMemeDao(database: AppDatabase): MemeDao = database.memeDao()
 
     @Provides
-    fun provideTextEmbeddingDao(database: AppDatabase): TextEmbeddingDao = database.textEmbeddingDao()
+    fun provideTextEmbeddingDao(database: AppDatabase): TextEmbeddingDao =
+        database.textEmbeddingDao()
 
     @Provides
     fun provideLightLogDao(database: AppDatabase): LightLogDao = database.lightLogDao()

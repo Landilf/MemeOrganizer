@@ -12,7 +12,11 @@ import ru.landilf.memeorganizer.data.storage.entities.search.TextEmbeddingEntity
 import ru.landilf.memeorganizer.data.storage.entities.logging.LightLogEventEntity
 import ru.landilf.memeorganizer.data.storage.dao.LightLogDao
 
-@Database(entities = [MemeEntity::class, TagEntity::class, MemeTagEntity::class, TextEmbeddingEntity::class, LightLogEventEntity::class], version = 5, exportSchema = true)
+@Database(
+    entities = [MemeEntity::class, TagEntity::class, MemeTagEntity::class, TextEmbeddingEntity::class, LightLogEventEntity::class],
+    version = 5,
+    exportSchema = true
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun memeDao(): MemeDao
     abstract fun tagDao(): TagDao

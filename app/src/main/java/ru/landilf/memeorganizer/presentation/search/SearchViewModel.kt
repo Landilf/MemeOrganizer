@@ -41,7 +41,12 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val preparation = prepareSearch()
-                _state.update { it.copy(modelAvailable = preparation.modelAvailable, preparing = false) }
+                _state.update {
+                    it.copy(
+                        modelAvailable = preparation.modelAvailable,
+                        preparing = false
+                    )
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -52,15 +57,22 @@ class SearchViewModel @Inject constructor(
     }
 
     fun updateQuery(query: String) {
-        _state.value.results.firstOrNull()?.takeIf { it.searchId !in actedSearchIds && query != _state.value.query }?.let { result ->
-            actedSearchIds += result.searchId
-            viewModelScope.launch {
-                lightLog.record("search_action", JSONObject()
-                    .put("search_id", result.searchId)
-                    .put("action_type", "reformulate")
-                    .put("time_since_impression_ms", System.currentTimeMillis() - result.impressionAtMs))
+        _state.value.results.firstOrNull()
+            ?.takeIf { it.searchId !in actedSearchIds && query != _state.value.query }
+            ?.let { result ->
+                actedSearchIds += result.searchId
+                viewModelScope.launch {
+                    lightLog.record(
+                        "search_action", JSONObject()
+                            .put("search_id", result.searchId)
+                            .put("action_type", "reformulate")
+                            .put(
+                                "time_since_impression_ms",
+                                System.currentTimeMillis() - result.impressionAtMs
+                            )
+                    )
+                }
             }
-        }
         _state.update { it.copy(query = query, error = false) }
         queryJob?.cancel()
         if (query.isBlank() || !_state.value.modelAvailable) {
@@ -72,12 +84,22 @@ class SearchViewModel @Inject constructor(
             try {
                 _state.update { it.copy(preparing = true) }
                 val results = searchMemes(query)
-                _state.update { state -> if (state.query == query) state.copy(results = results, preparing = false) else state }
+                _state.update { state ->
+                    if (state.query == query) state.copy(
+                        results = results,
+                        preparing = false
+                    ) else state
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 AppLogger.mlError(error) { "search.query.failed" }
-                _state.update { state -> if (state.query == query) state.copy(preparing = false, error = true) else state }
+                _state.update { state ->
+                    if (state.query == query) state.copy(
+                        preparing = false,
+                        error = true
+                    ) else state
+                }
             }
         }
     }
@@ -85,24 +107,35 @@ class SearchViewModel @Inject constructor(
     fun open(result: MemeSearchResult) {
         actedSearchIds += result.searchId
         viewModelScope.launch {
-            lightLog.record("search_action", JSONObject()
-                .put("search_id", result.searchId)
-                .put("action_type", "open")
-                .put("file_hash", result.meme.contentHash)
-                .put("rank", result.rank)
-                .put("time_since_impression_ms", System.currentTimeMillis() - result.impressionAtMs))
+            lightLog.record(
+                "search_action", JSONObject()
+                    .put("search_id", result.searchId)
+                    .put("action_type", "open")
+                    .put("file_hash", result.meme.contentHash)
+                    .put("rank", result.rank)
+                    .put(
+                        "time_since_impression_ms",
+                        System.currentTimeMillis() - result.impressionAtMs
+                    )
+            )
         }
     }
 
     fun abandonCurrentSearch() {
-        _state.value.results.firstOrNull()?.takeIf { it.searchId !in actedSearchIds }?.let { result ->
-            actedSearchIds += result.searchId
-            viewModelScope.launch {
-                lightLog.record("search_action", JSONObject()
-                    .put("search_id", result.searchId)
-                    .put("action_type", "abandon")
-                    .put("time_since_impression_ms", System.currentTimeMillis() - result.impressionAtMs))
+        _state.value.results.firstOrNull()?.takeIf { it.searchId !in actedSearchIds }
+            ?.let { result ->
+                actedSearchIds += result.searchId
+                viewModelScope.launch {
+                    lightLog.record(
+                        "search_action", JSONObject()
+                            .put("search_id", result.searchId)
+                            .put("action_type", "abandon")
+                            .put(
+                                "time_since_impression_ms",
+                                System.currentTimeMillis() - result.impressionAtMs
+                            )
+                    )
+                }
             }
-        }
     }
 }

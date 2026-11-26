@@ -25,13 +25,22 @@ class ImportViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val repository = object : MemeRepository {
         override fun observeMemes() = flowOf(emptyList<Meme>())
-        override suspend fun importMeme(source: ImportSource) = ImportResult.Failed(ImportFailure.SourceUnavailable)
+        override suspend fun importMeme(source: ImportSource) =
+            ImportResult.Failed(ImportFailure.SourceUnavailable)
     }
 
-    @Before fun setUp() { Dispatchers.setMain(dispatcher) }
-    @After fun tearDown() { Dispatchers.resetMain() }
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
 
-    @Test fun `selection and removal preserve remaining sources`() {
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `selection and removal preserve remaining sources`() {
         val savedState = SavedStateHandle()
         val viewModel = ImportViewModel(ImportMemesUseCase(repository), savedState)
         viewModel.setSources(listOf("one", "two", "one"))
@@ -40,10 +49,14 @@ class ImportViewModelTest {
 
         assertEquals(listOf("two"), viewModel.state.value.sources)
         assertTrue(viewModel.state.value.selected.isEmpty())
-        assertEquals(listOf("two"), ImportViewModel(ImportMemesUseCase(repository), savedState).state.value.sources)
+        assertEquals(
+            listOf("two"),
+            ImportViewModel(ImportMemesUseCase(repository), savedState).state.value.sources
+        )
     }
 
-    @Test fun `failed files remain available for retry`() = runTest(dispatcher) {
+    @Test
+    fun `failed files remain available for retry`() = runTest(dispatcher) {
         val viewModel = ImportViewModel(ImportMemesUseCase(repository), SavedStateHandle())
         viewModel.setSources(listOf("one", "two"))
         viewModel.startImport()

@@ -25,27 +25,58 @@ fun ComponentGallery(initialDark: Boolean, onBack: () -> Unit) {
         Scaffold(topBar = {
             TopAppBar(title = {}, navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back_button))
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back_button)
+                    )
                 }
             })
         }) { padding ->
             Column(
-                modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
+                modifier = Modifier.fillMaxSize().padding(padding)
+                    .verticalScroll(rememberScrollState()).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.theme_preview_dark_theme), modifier = Modifier.weight(1f))
+                    Text(
+                        stringResource(R.string.theme_preview_dark_theme),
+                        modifier = Modifier.weight(1f)
+                    )
                     Switch(checked = dark, onCheckedChange = { dark = it })
                 }
-                Text(stringResource(R.string.theme_preview_title), style = MaterialTheme.typography.headlineMedium)
-                Text(stringResource(R.string.theme_preview_body), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.theme_preview_title),
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                Text(
+                    stringResource(R.string.theme_preview_body),
+                    style = MaterialTheme.typography.bodyLarge
+                )
                 Button(onClick = {}) { Text(stringResource(R.string.theme_preview_primary_button)) }
                 OutlinedButton(onClick = {}) { Text(stringResource(R.string.theme_preview_secondary_button)) }
                 TextButton(onClick = {}) { Text(stringResource(R.string.theme_preview_text_button)) }
-                OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text(stringResource(R.string.theme_preview_text_field)) })
-                FilterChip(selected = selected, onClick = { selected = !selected }, label = { Text(stringResource(R.string.theme_preview_tag)) })
-                Card { Column(Modifier.padding(16.dp)) { Text(stringResource(R.string.theme_preview_card), style = MaterialTheme.typography.titleMedium); Text(stringResource(R.string.theme_preview_card_description)) } }
-                Row { Checkbox(checked = checked, onCheckedChange = { checked = it }); Text(stringResource(R.string.theme_preview_checkbox), modifier = Modifier.padding(top = 12.dp)) }
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text(stringResource(R.string.theme_preview_text_field)) })
+                FilterChip(
+                    selected = selected,
+                    onClick = { selected = !selected },
+                    label = { Text(stringResource(R.string.theme_preview_tag)) })
+                Card {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            stringResource(R.string.theme_preview_card),
+                            style = MaterialTheme.typography.titleMedium
+                        ); Text(stringResource(R.string.theme_preview_card_description))
+                    }
+                }
+                Row {
+                    Checkbox(checked = checked, onCheckedChange = { checked = it }); Text(
+                    stringResource(R.string.theme_preview_checkbox),
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                }
                 LinearProgressIndicator(progress = { 0.6f }, modifier = Modifier.fillMaxWidth())
             }
         }

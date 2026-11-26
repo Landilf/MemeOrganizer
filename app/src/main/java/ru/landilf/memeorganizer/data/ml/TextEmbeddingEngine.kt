@@ -16,14 +16,21 @@ class TextEmbeddingEngine private constructor(
     }
 
     override fun close() {
-        try { tokenizer.close() } finally { encoder.close() }
+        try {
+            tokenizer.close()
+        } finally {
+            encoder.close()
+        }
     }
 
     companion object {
         suspend fun open(modelPackage: TextModelPackage): TextEmbeddingEngine {
             val tokenizer = HuggingFaceTextTokenizer.open(modelPackage)
-            try { return TextEmbeddingEngine(tokenizer, OnnxTextEncoder.open(modelPackage)) }
-            catch (error: Throwable) { tokenizer.close(); throw error }
+            try {
+                return TextEmbeddingEngine(tokenizer, OnnxTextEncoder.open(modelPackage))
+            } catch (error: Throwable) {
+                tokenizer.close(); throw error
+            }
         }
     }
 }

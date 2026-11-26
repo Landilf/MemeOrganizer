@@ -54,10 +54,15 @@ class GitHubModelUpdater @Inject constructor(
         val preferences = context.modelUpdateDataStore.data.first()
         val installedTag = installer.activePackage()?.releaseTag
         context.modelUpdateDataStore.edit { stored ->
-            if (installedTag == null) stored.remove(INSTALLED_TAG) else stored[INSTALLED_TAG] = installedTag
+            if (installedTag == null) stored.remove(INSTALLED_TAG) else stored[INSTALLED_TAG] =
+                installedTag
         }
         val dismissedTag = preferences[DISMISSED_TAG]
-        if (installedTag != null && compareVersions(release.tag, installedTag) <= 0) return@withContext ModelUpdateCheck.UpToDate
+        if (installedTag != null && compareVersions(
+                release.tag,
+                installedTag
+            ) <= 0
+        ) return@withContext ModelUpdateCheck.UpToDate
         if (!manual && dismissedTag == release.tag) return@withContext ModelUpdateCheck.UpToDate
         ModelUpdateCheck.Available(release)
     }
@@ -71,7 +76,10 @@ class GitHubModelUpdater @Inject constructor(
         context.modelUpdateDataStore.edit { it[INSTALLED_TAG] = tag }
     }
 
-    suspend fun downloadAndInstall(release: ModelRelease, onProgress: (ModelDownloadProgress) -> Unit) = withContext(Dispatchers.IO) {
+    suspend fun downloadAndInstall(
+        release: ModelRelease,
+        onProgress: (ModelDownloadProgress) -> Unit
+    ) = withContext(Dispatchers.IO) {
         if (!isOnline()) throw ModelUpdateOfflineException()
         AppLogger.ml { "update.download.start tag=${release.tag} bytes=${release.archiveSizeBytes}" }
         val connection = openConnection(release.archiveUrl)
@@ -109,11 +117,20 @@ class GitHubModelUpdater @Inject constructor(
         require(VERSION_PATTERN.matches(tag)) { "Unsupported model release tag" }
         val assets = release.getJSONArray("assets")
         fun asset(predicate: (String) -> Boolean): JSONObject? = (0 until assets.length())
-            .asSequence().map { assets.getJSONObject(it) }.firstOrNull { predicate(it.getString("name")) }
-        val archive = requireNotNull(asset { it.endsWith(".tar.gz") }) { "Model archive is missing" }
-        val checksums = requireNotNull(asset { it.equals("SHA256SUMS.txt", ignoreCase = true) }) { "SHA256SUMS.txt is missing" }
+            .asSequence().map { assets.getJSONObject(it) }
+            .firstOrNull { predicate(it.getString("name")) }
+
+        val archive =
+            requireNotNull(asset { it.endsWith(".tar.gz") }) { "Model archive is missing" }
+        val checksums = requireNotNull(asset {
+            it.equals(
+                "SHA256SUMS.txt",
+                ignoreCase = true
+            )
+        }) { "SHA256SUMS.txt is missing" }
         val archiveName = archive.getString("name")
-        val checksum = checksumFor(downloadText(checksums.getString("browser_download_url")), archiveName)
+        val checksum =
+            checksumFor(downloadText(checksums.getString("browser_download_url")), archiveName)
         return ModelRelease(
             tag = tag,
             title = release.optString("name").ifBlank { tag },
@@ -153,7 +170,8 @@ class GitHubModelUpdater @Inject constructor(
     private fun isOnline(): Boolean {
         val manager = context.getSystemService(ConnectivityManager::class.java)
         val network = manager.activeNetwork ?: return false
-        return manager.getNetworkCapabilities(network)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        return manager.getNetworkCapabilities(network)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
     }
 
     private class ProgressInputStream(
@@ -165,7 +183,8 @@ class GitHubModelUpdater @Inject constructor(
         private var lastReported = -REPORT_INTERVAL
 
         override fun read(): Int = super.read().also { if (it >= 0) onRead(1) }
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int = super.read(buffer, offset, length).also { if (it > 0) onRead(it.toLong()) }
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+            super.read(buffer, offset, length).also { if (it > 0) onRead(it.toLong()) }
 
         private fun onRead(read: Long) {
             downloaded += read
@@ -177,13 +196,17 @@ class GitHubModelUpdater @Inject constructor(
     }
 
     private fun compareVersions(left: String, right: String): Int {
-        val l = requireNotNull(VERSION_PATTERN.matchEntire(left)).groupValues.drop(1).map(String::toInt)
-        val r = requireNotNull(VERSION_PATTERN.matchEntire(right)).groupValues.drop(1).map(String::toInt)
-        return l.zip(r).firstOrNull { it.first != it.second }?.let { it.first.compareTo(it.second) } ?: 0
+        val l =
+            requireNotNull(VERSION_PATTERN.matchEntire(left)).groupValues.drop(1).map(String::toInt)
+        val r = requireNotNull(VERSION_PATTERN.matchEntire(right)).groupValues.drop(1)
+            .map(String::toInt)
+        return l.zip(r).firstOrNull { it.first != it.second }?.let { it.first.compareTo(it.second) }
+            ?: 0
     }
 
     private companion object {
-        const val LATEST_RELEASE_URL = "https://api.github.com/repos/alexo375/meme-organizer/releases/latest"
+        const val LATEST_RELEASE_URL =
+            "https://api.github.com/repos/alexo375/meme-organizer/releases/latest"
         val INSTALLED_TAG = stringPreferencesKey("installed_model_release_tag")
         val DISMISSED_TAG = stringPreferencesKey("dismissed_model_release_tag")
         val VERSION_PATTERN = Regex("v(\\d+)\\.(\\d+)\\.(\\d+)-mobile")

@@ -26,9 +26,12 @@ data class TextModelPackage(
             require(manifest.getString("component") == "text_encoder") { "Expected text encoder" }
             fun asset(path: String): File {
                 val file = File(root, path).canonicalFile
-                require(file.toPath().startsWith(root.toPath()) && file != root && file.isFile) { "Invalid package file" }
+                require(
+                    file.toPath().startsWith(root.toPath()) && file != root && file.isFile
+                ) { "Invalid package file" }
                 return file
             }
+
             val model = asset(manifest.getString("model_file"))
             val tokenizer = manifest.getJSONObject("tokenizer")
             val tokenizerFile = asset(tokenizer.getString("recommended_asset"))
@@ -59,8 +62,17 @@ data class TextModelPackage(
             val releaseTag = manifest.getString("release_tag")
             require(RELEASE_TAG.matches(releaseTag)) { "Invalid release tag" }
             return TextModelPackage(
-                model, tokenizerFile, dimension, maxLength, prefixes.getString("query"), prefixes.getString("passage"),
-                paddingTokenId, actualHash, denseWeight, bm25Weight, releaseTag
+                model,
+                tokenizerFile,
+                dimension,
+                maxLength,
+                prefixes.getString("query"),
+                prefixes.getString("passage"),
+                paddingTokenId,
+                actualHash,
+                denseWeight,
+                bm25Weight,
+                releaseTag
             )
         }
 

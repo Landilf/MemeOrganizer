@@ -286,9 +286,11 @@ CREATE TABLE visual_frames_meta (
 
 ### Схема записей в `events.jsonl`
 
+`events.jsonl` использует формат **JSON Lines (JSONL)**: каждая строка — самостоятельный JSON-объект, а не часть одного JSON-массива.
+
 Первой строкой каждого экспорта идёт заголовок `export_header` с характеристиками устройства и окружения (чтобы замеры latency и ошибки инференса были привязаны к конкретному железу, без дублирования в каждой строке):
 
-```json
+```json lines
 {
   "record_type": "export_header",
   "exported_at_ms": 1763880100000,
@@ -307,7 +309,7 @@ CREATE TABLE visual_frames_meta (
 
 Далее следуют строки событий поиска (`search_event`):
 
-```json
+```json lines
 {
   "record_type": "search_event",
   "event_id": "uuid-v4",
@@ -350,7 +352,7 @@ CREATE TABLE visual_frames_meta (
 
 Для диагностики производительности индексации и падений на реальных устройствах в тот же поток пишутся события индексации (`indexing_event`):
 
-```json
+```json lines
 {
   "record_type": "indexing_event",
   "event_id": "uuid-v4",
