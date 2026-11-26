@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import ru.landilf.memeorganizer.R
@@ -71,12 +72,15 @@ import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.presentation.library.AlbumCreationError
+import ru.landilf.memeorganizer.presentation.library.AlbumRenameError
 
 private enum class MainTab(val title: Int, val icon: ImageVector, val message: Int) {
     Albums(R.string.navigation_albums, Icons.Default.Collections, R.string.albums_empty),
     Home(R.string.navigation_home, Icons.Default.Home, R.string.library_empty),
     Favorites(R.string.navigation_favorites, Icons.Default.Favorite, R.string.favorites_empty)
 }
+
+private const val SEARCH_CANDIDATE_IDS_KEY = "search_candidate_ids"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,6 +128,12 @@ fun AppRoot() {
                     },
                     onMemeClick = { result ->
                         searchViewModel.open(result)
+                        navController.currentBackStackEntry
+                            ?.savedStateHandle
+                            ?.set(
+                                SEARCH_CANDIDATE_IDS_KEY,
+                                ArrayList(searchState.results.map { it.meme.id })
+                            )
                         navController.navigate("viewer/${result.meme.id}?searchId=${result.searchId}&rank=${result.rank}&impressionAtMs=${result.impressionAtMs}")
                     }
                 )
@@ -140,26 +150,45 @@ fun AppRoot() {
             ) { entry ->
                 val libraryViewModel: LibraryViewModel = hiltViewModel()
                 val memes by libraryViewModel.memes.collectAsStateWithLifecycle()
+                val albums by libraryViewModel.albums.collectAsStateWithLifecycle()
                 val memeId = entry.arguments?.getString("memeId")?.toLongOrNull()
                 val searchId = entry.arguments?.getString("searchId")
                 val rank = entry.arguments?.getInt("rank") ?: -1
                 val impressionAtMs = entry.arguments?.getLong("impressionAtMs") ?: -1L
+                val searchCandidateIds = navController.previousBackStackEntry
+                    ?.savedStateHandle
+                    ?.get<ArrayList<Long>>(SEARCH_CANDIDATE_IDS_KEY)
+                val memesById = memes.associateBy(Meme::id)
+                val candidateMemes = searchCandidateIds?.mapNotNull { candidateId ->
+                    memesById[candidateId]
+                }
+                val searchRankByMemeId = searchCandidateIds
+                    ?.mapIndexed { index, candidateId -> candidateId to index + 1 }
+                    ?.toMap()
                 if (memeId != null) LibraryViewer(
-                    memes = memes,
+                    memes = candidateMemes ?: memes,
+                    albums = albums,
                     initialId = memeId,
                     viewModel = libraryViewModel,
                     onBack = { navController.popBackStack() },
                     onCopy = { meme ->
-                        if (searchId != null && rank > 0 && impressionAtMs > 0) {
-                            libraryViewModel.recordSearchCopy(searchId, meme, rank, impressionAtMs)
+                        val actionRank = searchRankByMemeId?.get(meme.id) ?: rank
+                        if (searchId != null && actionRank > 0 && impressionAtMs > 0) {
+                            libraryViewModel.recordSearchCopy(
+                                searchId,
+                                meme,
+                                actionRank,
+                                impressionAtMs
+                            )
                         }
                     },
                     onFavorite = { meme, isFavorite ->
-                        if (isFavorite && searchId != null && rank > 0 && impressionAtMs > 0) {
+                        val actionRank = searchRankByMemeId?.get(meme.id) ?: rank
+                        if (isFavorite && searchId != null && actionRank > 0 && impressionAtMs > 0) {
                             libraryViewModel.recordSearchFavorite(
                                 searchId,
                                 meme,
-                                rank,
+                                actionRank,
                                 impressionAtMs
                             )
                         }
@@ -270,14 +299,20 @@ private fun AlbumContentsScreen(
     album: Album,
     memes: List<Meme>,
     onBack: () -> Unit,
-    onMemeClick: (Meme) -> Unit
+    onMemeClick: (Meme) -> Unit,
+    onRemoveMemes: (Set<Long>) -> Unit
 ) {
     val context = LocalContext.current
-    BackHandler(onBack = onBack)
+    var selected by remember { mutableStateOf(setOf<Long>()) }
+    BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
+    BackHandler(enabled = selected.isEmpty(), onBack = onBack)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(album.name) },
+                title = {
+                    if (selected.isEmpty()) Text(album.name)
+                    else Text(stringResource(R.string.import_selected_count, selected.size))
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -287,6 +322,24 @@ private fun AlbumContentsScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (selected.isNotEmpty()) {
+                BottomAppBar {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        TextButton(onClick = {
+                            onRemoveMemes(selected)
+                            selected = emptySet()
+                        }) {
+                            Icon(Icons.Default.Delete, null)
+                            Text(stringResource(R.string.albums_remove_memes))
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
         if (memes.isEmpty()) {
@@ -310,14 +363,28 @@ private fun AlbumContentsScreen(
                 items(memes, key = { it.id }) { meme ->
                     Box(
                         Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(
-                            onClick = { onMemeClick(meme) },
-                            onLongClick = {}
+                            onClick = {
+                                if (selected.isEmpty()) onMemeClick(meme)
+                                else {
+                                    selected = if (meme.id in selected) {
+                                        selected - meme.id
+                                    } else {
+                                        selected + meme.id
+                                    }
+                                }
+                            },
+                            onLongClick = { selected = selected + meme.id }
                         )
                     ) {
                         MediaThumbnail(
                             Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")),
                             meme.mimeType,
                             Modifier.fillMaxSize()
+                        )
+                        if (meme.id in selected) Checkbox(
+                            checked = true,
+                            onCheckedChange = { selected = selected - meme.id },
+                            modifier = Modifier.align(Alignment.TopEnd)
                         )
                     }
                 }
@@ -352,12 +419,20 @@ private fun MainTabsScreen(
     var albumDialogVisible by rememberSaveable { mutableStateOf(false) }
     var albumPickerVisible by rememberSaveable { mutableStateOf(false) }
     var albumName by rememberSaveable { mutableStateOf("") }
+    var albumOptionsId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var albumRenameId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var albumDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var renamedAlbumName by rememberSaveable { mutableStateOf("") }
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
     val albumCreationError by libraryViewModel.albumCreationError.collectAsStateWithLifecycle()
+    val albumRenameError by libraryViewModel.albumRenameError.collectAsStateWithLifecycle()
     val albumMemes by libraryViewModel.albumMemes.collectAsStateWithLifecycle()
     val openedAlbum = albums.firstOrNull { it.id == openedAlbumId }
+    val albumWithOptions = albums.firstOrNull { it.id == albumOptionsId }
+    val albumToRename = albums.firstOrNull { it.id == albumRenameId }
+    val albumToDelete = albums.firstOrNull { it.id == albumDeleteId }
     LaunchedEffect(openedAlbumId) {
         openedAlbumId?.let(libraryViewModel::openAlbum) ?: libraryViewModel.closeAlbum()
     }
@@ -376,7 +451,14 @@ private fun MainTabsScreen(
             openedFromFavorites -> memes.filter { it.isFavorite }
             else -> memes
         }
-        LibraryViewer(viewerMemes, openedId!!, libraryViewModel, onBack = { openedId = null })
+        LibraryViewer(
+            memes = viewerMemes,
+            initialId = openedId!!,
+            viewModel = libraryViewModel,
+            onBack = { openedId = null },
+            albums = albums,
+            currentAlbumId = if (openedFromAlbum) openedAlbumId else null
+        )
         return
     }
     if (openedAlbum != null) {
@@ -391,6 +473,9 @@ private fun MainTabsScreen(
                 openedFromAlbum = true
                 openedFromFavorites = false
                 openedId = meme.id
+            },
+            onRemoveMemes = { memeIds ->
+                libraryViewModel.removeMemesFromAlbum(openedAlbum.id, memeIds)
             }
         )
         return
@@ -442,6 +527,96 @@ private fun MainTabsScreen(
                     libraryViewModel.clearAlbumCreationError()
                     albumDialogVisible = false
                 }) { Text(stringResource(R.string.cancel_button)) }
+            }
+        )
+    }
+    if (albumWithOptions != null) {
+        AlertDialog(
+            onDismissRequest = { albumOptionsId = null },
+            title = { Text(stringResource(R.string.albums_manage)) },
+            text = { Text(albumWithOptions.name) },
+            confirmButton = {
+                TextButton(onClick = {
+                    renamedAlbumName = albumWithOptions.name
+                    libraryViewModel.clearAlbumRenameError()
+                    albumRenameId = albumWithOptions.id
+                    albumOptionsId = null
+                }) { Text(stringResource(R.string.albums_rename)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    albumDeleteId = albumWithOptions.id
+                    albumOptionsId = null
+                }) { Text(stringResource(R.string.albums_delete)) }
+            }
+        )
+    }
+    if (albumToRename != null) {
+        val errorText = when (albumRenameError) {
+            AlbumRenameError.EmptyName -> R.string.albums_rename_error_empty
+            AlbumRenameError.Duplicate -> R.string.albums_rename_error_duplicate
+            AlbumRenameError.Failed -> R.string.albums_rename_error_failed
+            null -> null
+        }
+        AlertDialog(
+            onDismissRequest = {
+                libraryViewModel.clearAlbumRenameError()
+                albumRenameId = null
+            },
+            title = { Text(stringResource(R.string.albums_rename_title)) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = renamedAlbumName,
+                        onValueChange = {
+                            renamedAlbumName = it
+                            libraryViewModel.clearAlbumRenameError()
+                        },
+                        label = { Text(stringResource(R.string.albums_name)) },
+                        singleLine = true,
+                        isError = errorText != null
+                    )
+                    if (errorText != null) {
+                        Text(
+                            text = stringResource(errorText),
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    libraryViewModel.renameAlbum(albumToRename.id, renamedAlbumName) {
+                        albumRenameId = null
+                    }
+                }) { Text(stringResource(R.string.albums_rename)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    libraryViewModel.clearAlbumRenameError()
+                    albumRenameId = null
+                }) { Text(stringResource(R.string.cancel_button)) }
+            }
+        )
+    }
+    if (albumToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { albumDeleteId = null },
+            title = { Text(stringResource(R.string.albums_delete_title)) },
+            text = { Text(stringResource(R.string.albums_delete_message)) },
+            confirmButton = {
+                TextButton(onClick = { albumDeleteId = null }) {
+                    Text(stringResource(R.string.no_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    libraryViewModel.deleteAlbum(albumToDelete.id) {
+                        if (openedAlbumId == albumToDelete.id) openedAlbumId = null
+                        albumDeleteId = null
+                    }
+                }) { Text(stringResource(R.string.yes_button)) }
             }
         )
     }
@@ -638,14 +813,25 @@ private fun MainTabsScreen(
                         Card(
                             Modifier.fillMaxWidth().combinedClickable(
                                 onClick = { openedAlbumId = album.id },
-                                onLongClick = {}
+                                onLongClick = { albumOptionsId = album.id }
                             )
                         ) {
-                            Text(
-                                album.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(16.dp)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = album.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f).padding(16.dp)
+                                )
+                                IconButton(onClick = { albumOptionsId = album.id }) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = stringResource(R.string.albums_manage)
+                                    )
+                                }
+                            }
                         }
                     }
                 }

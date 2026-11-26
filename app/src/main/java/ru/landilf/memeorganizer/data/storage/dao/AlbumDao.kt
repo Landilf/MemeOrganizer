@@ -21,6 +21,17 @@ interface AlbumDao {
     suspend fun insertMemeLinks(links: List<AlbumMemeEntity>)
 
     @Query(
+        "UPDATE albums SET name = :name, normalizedName = :normalizedName WHERE id = :albumId"
+    )
+    suspend fun rename(albumId: Long, name: String, normalizedName: String): Int
+
+    @Query("DELETE FROM albums WHERE id = :albumId")
+    suspend fun delete(albumId: Long)
+
+    @Query("DELETE FROM album_memes WHERE albumId = :albumId AND memeId IN (:memeIds)")
+    suspend fun deleteMemeLinks(albumId: Long, memeIds: Set<Long>)
+
+    @Query(
         """
         SELECT memes.*
         FROM memes

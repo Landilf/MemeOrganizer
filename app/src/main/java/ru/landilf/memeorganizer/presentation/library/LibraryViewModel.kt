@@ -21,6 +21,9 @@ import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumsUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumMemesUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.DeleteAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.RemoveMemesFromAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.RenameAlbumUseCase
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
@@ -30,6 +33,7 @@ import ru.landilf.memeorganizer.domain.model.meme.Meme
 import javax.inject.Inject
 
 enum class AlbumCreationError { EmptyName, Duplicate, Failed }
+enum class AlbumRenameError { EmptyName, Duplicate, Failed }
 
 data class EditState(
     val memeId: Long,
@@ -52,6 +56,9 @@ class LibraryViewModel @Inject constructor(
     private val setMemeFavorite: SetMemeFavoriteUseCase,
     private val createNewAlbum: CreateAlbumUseCase,
     private val addMemes: AddMemesToAlbumUseCase,
+    private val renameAlbumUseCase: RenameAlbumUseCase,
+    private val deleteAlbumUseCase: DeleteAlbumUseCase,
+    private val removeMemesFromAlbumUseCase: RemoveMemesFromAlbumUseCase,
     private val searchRepository: MemeSearchRepository,
     private val lightLog: LightLogStore
 ) : ViewModel() {
@@ -73,6 +80,8 @@ class LibraryViewModel @Inject constructor(
     val deleteError = _deleteError.asStateFlow()
     private val _albumCreationError = MutableStateFlow<AlbumCreationError?>(null)
     val albumCreationError = _albumCreationError.asStateFlow()
+    private val _albumRenameError = MutableStateFlow<AlbumRenameError?>(null)
+    val albumRenameError = _albumRenameError.asStateFlow()
 
     fun openEditor(id: Long) {
         _edit.value = EditState(id)
@@ -183,6 +192,43 @@ class LibraryViewModel @Inject constructor(
         _albumCreationError.value = null
     }
 
+    fun renameAlbum(albumId: Long, name: String, onRenamed: () -> Unit) {
+        _albumRenameError.value = null
+        viewModelScope.launch {
+            try {
+                if (renameAlbumUseCase(albumId, name)) {
+                    onRenamed()
+                } else {
+                    _albumRenameError.value = AlbumRenameError.Duplicate
+                }
+            } catch (e: IllegalArgumentException) {
+                _albumRenameError.value = AlbumRenameError.EmptyName
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                AppLogger.app { "album.rename.failed type=${error.javaClass.simpleName}" }
+                _albumRenameError.value = AlbumRenameError.Failed
+            }
+        }
+    }
+
+    fun clearAlbumRenameError() {
+        _albumRenameError.value = null
+    }
+
+    fun deleteAlbum(albumId: Long, onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                deleteAlbumUseCase(albumId)
+                onDeleted()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                AppLogger.app { "album.delete.failed type=${error.javaClass.simpleName}" }
+            }
+        }
+    }
+
     fun openAlbum(albumId: Long) {
         openedAlbumId.value = albumId
     }
@@ -201,6 +247,20 @@ class LibraryViewModel @Inject constructor(
                 throw e
             } catch (error: Exception) {
                 AppLogger.app { "album.memes.add.failed type=${error.javaClass.simpleName}" }
+            }
+        }
+    }
+
+    fun removeMemesFromAlbum(albumId: Long, memeIds: Set<Long>, onRemoved: () -> Unit = {}) {
+        if (memeIds.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                removeMemesFromAlbumUseCase(albumId, memeIds)
+                onRemoved()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                AppLogger.app { "album.memes.remove.failed type=${error.javaClass.simpleName}" }
             }
         }
     }

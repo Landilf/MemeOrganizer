@@ -16,6 +16,9 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.model.meme.Meme
+import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.presentation.common.FullMedia
 import java.io.File
 
@@ -39,6 +43,8 @@ fun LibraryViewer(
     initialId: Long,
     viewModel: LibraryViewModel,
     onBack: () -> Unit,
+    albums: List<Album> = emptyList(),
+    currentAlbumId: Long? = null,
     onCopy: (Meme) -> Unit = {},
     onFavorite: (Meme, Boolean) -> Unit = { _, _ -> }
 ) {
@@ -46,6 +52,8 @@ fun LibraryViewer(
     val suggestions by viewModel.tags.collectAsStateWithLifecycle()
     var visible by rememberSaveable { mutableStateOf(true) }
     var pendingDelete by rememberSaveable { mutableStateOf<Long?>(null) }
+    var albumPickerVisible by rememberSaveable { mutableStateOf(false) }
+    var secondaryMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var hasShownMedia by remember(initialId) { mutableStateOf(false) }
     val context = LocalContext.current
     BackHandler(enabled = edit == null) { onBack() }
@@ -65,6 +73,11 @@ fun LibraryViewer(
     val pager = rememberPagerState(
         initialPage = memes.indexOfFirst { it.id == initialId }.coerceAtLeast(0),
         pageCount = { memes.size })
+    LaunchedEffect(memes.size) {
+        if (pager.currentPage >= memes.size) {
+            pager.scrollToPage(memes.lastIndex)
+        }
+    }
     if (pendingDelete != null) AlertDialog(
         onDismissRequest = { pendingDelete = null },
         title = { Text(stringResource(R.string.library_delete_title)) },
@@ -80,6 +93,34 @@ fun LibraryViewer(
             }) { Text(stringResource(R.string.no_button)) }
         }
     )
+    if (albumPickerVisible) {
+        AlertDialog(
+            onDismissRequest = { albumPickerVisible = false },
+            title = { Text(stringResource(R.string.albums_add_memes_title)) },
+            text = {
+                Column {
+                    albums.filterNot { it.id == currentAlbumId }.forEach { album ->
+                        TextButton(
+                            onClick = {
+                                memes.getOrNull(pager.currentPage)?.let { meme ->
+                                    viewModel.addMemesToAlbum(album.id, setOf(meme.id)) {
+                                        albumPickerVisible = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(album.name, modifier = Modifier.fillMaxWidth()) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { albumPickerVisible = false }) {
+                    Text(stringResource(R.string.cancel_button))
+                }
+            }
+        )
+    }
     edit?.let {
         MemeEditDialog(
             it,
@@ -92,15 +133,20 @@ fun LibraryViewer(
     }
     Scaffold { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            HorizontalPager(pager, Modifier.fillMaxSize(), key = { memes[it].id }) { page ->
-                val meme = memes[page]
-                FullMedia(
-                    Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")),
-                    meme.mimeType,
-                    Modifier.fillMaxSize(),
-                    page == pager.settledPage,
-                    visible
-                ) { visible = !visible }
+            HorizontalPager(
+                state = pager,
+                modifier = Modifier.fillMaxSize(),
+                key = { page -> memes.getOrNull(page)?.id ?: page }
+            ) { page ->
+                memes.getOrNull(page)?.let { meme ->
+                    FullMedia(
+                        Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")),
+                        meme.mimeType,
+                        Modifier.fillMaxSize(),
+                        page == pager.settledPage,
+                        visible
+                    ) { visible = !visible }
+                }
             }
             if (visible) {
                 TopAppBar(
@@ -130,6 +176,39 @@ fun LibraryViewer(
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         IconButton(onClick = {
+                            memes.getOrNull(pager.currentPage)?.let { meme ->
+                                pendingDelete = meme.id
+                            }
+                        }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                stringResource(R.string.library_delete)
+                            )
+                        }
+                        IconButton(onClick = {
+                            memes.getOrNull(pager.currentPage)?.let { meme ->
+                                val isFavorite = !meme.isFavorite
+                                viewModel.setFavorite(meme, isFavorite) {
+                                    onFavorite(meme, isFavorite)
+                                }
+                            }
+                        }) {
+                            Icon(
+                                if (memes.getOrNull(pager.currentPage)?.isFavorite == true) {
+                                    Icons.Default.Favorite
+                                } else {
+                                    Icons.Default.FavoriteBorder
+                                },
+                                stringResource(
+                                    if (memes.getOrNull(pager.currentPage)?.isFavorite == true) {
+                                        R.string.library_remove_favorite
+                                    } else {
+                                        R.string.library_favorite
+                                    }
+                                )
+                            )
+                        }
+                        IconButton(onClick = {
                             memes.getOrNull(pager.currentPage)?.let { viewModel.openEditor(it.id) }
                         }) { Icon(Icons.Default.Edit, stringResource(R.string.edit_title)) }
                         IconButton(onClick = {
@@ -158,32 +237,43 @@ fun LibraryViewer(
                                 stringResource(R.string.library_copy)
                             )
                         }
-                        IconButton(onClick = {
-                            memes.getOrNull(pager.currentPage)?.let { meme ->
-                                val isFavorite = !meme.isFavorite
-                                viewModel.setFavorite(meme, isFavorite) {
-                                    onFavorite(meme, isFavorite)
-                                }
+                        Box {
+                            IconButton(onClick = { secondaryMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    stringResource(R.string.library_more_actions)
+                                )
                             }
-                        }) {
-                            Icon(
-                                if (memes.getOrNull(pager.currentPage)?.isFavorite == true) {
-                                    Icons.Default.Favorite
-                                } else {
-                                    Icons.Default.FavoriteBorder
-                                },
-                                stringResource(
-                                    if (memes.getOrNull(pager.currentPage)?.isFavorite == true) {
-                                        R.string.library_remove_favorite
-                                    } else {
-                                        R.string.library_favorite
+                            DropdownMenu(
+                                expanded = secondaryMenuExpanded,
+                                onDismissRequest = { secondaryMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.albums_add_memes)) },
+                                    leadingIcon = { Icon(Icons.Default.Collections, null) },
+                                    enabled = albums.any { it.id != currentAlbumId },
+                                    onClick = {
+                                        secondaryMenuExpanded = false
+                                        albumPickerVisible = true
                                     }
                                 )
-                            )
+                                if (currentAlbumId != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.albums_remove_meme)) },
+                                        leadingIcon = { Icon(Icons.Default.Remove, null) },
+                                        onClick = {
+                                            secondaryMenuExpanded = false
+                                            memes.getOrNull(pager.currentPage)?.let { meme ->
+                                                viewModel.removeMemesFromAlbum(
+                                                    currentAlbumId,
+                                                    setOf(meme.id)
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
-                        IconButton(onClick = {
-                            pendingDelete = memes.getOrNull(pager.currentPage)?.id
-                        }) { Icon(Icons.Default.Delete, stringResource(R.string.library_delete)) }
                     }
                 }
             }

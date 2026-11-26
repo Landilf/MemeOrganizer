@@ -31,8 +31,23 @@ class AlbumRepositoryImpl @Inject constructor(
         memes.map(memeMapper::toDomain)
     }
 
+    override suspend fun rename(albumId: Long, name: String): Boolean = albumDao.rename(
+        albumId = albumId,
+        name = name,
+        normalizedName = AlbumNameRules.normalize(name)
+    ) > 0
+
+    override suspend fun delete(albumId: Long) {
+        albumDao.delete(albumId)
+    }
+
     override suspend fun addMemes(albumId: Long, memeIds: Set<Long>) {
         if (memeIds.isEmpty()) return
         albumDao.insertMemeLinks(memeIds.map { memeId -> AlbumMemeEntity(albumId, memeId) })
+    }
+
+    override suspend fun removeMemes(albumId: Long, memeIds: Set<Long>) {
+        if (memeIds.isEmpty()) return
+        albumDao.deleteMemeLinks(albumId, memeIds)
     }
 }
