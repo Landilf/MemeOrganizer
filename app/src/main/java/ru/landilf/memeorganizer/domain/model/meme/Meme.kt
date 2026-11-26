@@ -10,5 +10,7 @@ data class Meme(
     val addedAt: Instant,
     val contentHash: String,
     val storedFileName: String,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val lastUsedAt: Instant? = null,
+    val usageCount: Long = 0
 )

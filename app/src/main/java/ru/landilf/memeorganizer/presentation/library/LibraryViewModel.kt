@@ -17,6 +17,7 @@ import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.usecase.meme.ObserveMemesUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SetMemeFavoriteUseCase
+import ru.landilf.memeorganizer.domain.usecase.meme.MarkMemeUsedUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumsUseCase
@@ -52,6 +53,7 @@ class LibraryViewModel @Inject constructor(
     private val detailsRepository: MemeDetailsRepository,
     private val saveDetails: SaveMemeDetailsUseCase,
     private val setMemeFavorite: SetMemeFavoriteUseCase,
+    private val recordMemeUsage: MarkMemeUsedUseCase,
     private val createNewAlbum: CreateAlbumUseCase,
     private val addMemes: AddMemesToAlbumUseCase,
     private val renameAlbumUseCase: RenameAlbumUseCase,
@@ -166,6 +168,18 @@ class LibraryViewModel @Inject constructor(
                 throw e
             } catch (error: Exception) {
                 AppLogger.app { "favorite.update.failed type=${error.javaClass.simpleName}" }
+            }
+        }
+    }
+
+    fun markMemeUsed(memeId: Long) {
+        viewModelScope.launch {
+            try {
+                recordMemeUsage(memeId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                AppLogger.app { "meme.usage.update.failed type=${error.javaClass.simpleName}" }
             }
         }
     }

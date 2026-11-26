@@ -9,5 +9,6 @@ interface MemeDetailsRepository {
     suspend fun load(memeId: Long): MemeDetails
     suspend fun save(memeId: Long, details: MemeDetails)
     suspend fun setFavorite(memeId: Long, isFavorite: Boolean)
+    suspend fun markUsed(memeId: Long)
     suspend fun delete(memeIds: Set<Long>)
 }

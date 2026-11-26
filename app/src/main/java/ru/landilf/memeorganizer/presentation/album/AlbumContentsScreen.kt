@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.landilf.memeorganizer.R
-import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
 import java.io.File
@@ -46,21 +45,22 @@ import java.io.File
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumContentsScreen(
-    album: Album,
+    title: String,
     memes: List<Meme>,
     onBack: () -> Unit,
     onMemeClick: (Meme) -> Unit,
-    onRemoveMemes: (Set<Long>) -> Unit
+    onRemoveMemes: ((Set<Long>) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val supportsSelection = onRemoveMemes != null
     var selected by remember { mutableStateOf(setOf<Long>()) }
-    BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
-    BackHandler(enabled = selected.isEmpty(), onBack = onBack)
+    BackHandler(enabled = supportsSelection && selected.isNotEmpty()) { selected = emptySet() }
+    BackHandler(enabled = !supportsSelection || selected.isEmpty(), onBack = onBack)
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    if (selected.isEmpty()) Text(album.name)
+                    if (!supportsSelection || selected.isEmpty()) Text(title)
                     else Text(stringResource(R.string.import_selected_count, selected.size))
                 },
                 navigationIcon = {
@@ -74,11 +74,11 @@ fun AlbumContentsScreen(
             )
         },
         bottomBar = {
-            if (selected.isNotEmpty()) {
+            if (supportsSelection && selected.isNotEmpty()) {
                 BottomAppBar {
                     TextButton(
                         onClick = {
-                            onRemoveMemes(selected)
+                            onRemoveMemes?.invoke(selected)
                             selected = emptySet()
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -112,7 +112,7 @@ fun AlbumContentsScreen(
                     Box(
                         Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(
                             onClick = {
-                                if (selected.isEmpty()) onMemeClick(meme)
+                                if (!supportsSelection || selected.isEmpty()) onMemeClick(meme)
                                 else {
                                     selected = if (meme.id in selected) {
                                         selected - meme.id
@@ -121,7 +121,11 @@ fun AlbumContentsScreen(
                                     }
                                 }
                             },
-                            onLongClick = { selected = selected + meme.id }
+                            onLongClick = if (supportsSelection) {
+                                { selected = selected + meme.id }
+                            } else {
+                                null
+                            }
                         )
                     ) {
                         MediaThumbnail(

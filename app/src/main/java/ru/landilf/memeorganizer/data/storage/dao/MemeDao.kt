@@ -30,6 +30,11 @@ interface MemeDao {
     @Query("UPDATE memes SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun updateFavorite(id: Long, isFavorite: Boolean): Int
 
+    @Query(
+        "UPDATE memes SET lastUsedAtMillis = :usedAtMillis, usageCount = usageCount + 1 WHERE id = :id"
+    )
+    suspend fun markUsed(id: Long, usedAtMillis: Long): Int
+
     @Query("DELETE FROM memes WHERE id = :id")
     suspend fun deleteById(id: Long): Int
 }

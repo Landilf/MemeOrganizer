@@ -25,7 +25,7 @@ import ru.landilf.memeorganizer.data.storage.entities.album.AlbumMemeEntity
         AlbumEntity::class,
         AlbumMemeEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -195,6 +195,7 @@ fun LibraryViewer(
                             memes.getOrNull(pager.currentPage)?.let { meme ->
                                 copyMemeToClipboard(context, meme)
                                     .onSuccess {
+                                        viewModel.markMemeUsed(meme.id)
                                         Toast.makeText(
                                             context,
                                             R.string.library_copy_success,

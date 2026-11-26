@@ -81,7 +81,8 @@ class DatabaseMigrationsTest {
                     DatabaseMigrations.MIGRATION_4_5,
                     DatabaseMigrations.MIGRATION_5_6,
                     DatabaseMigrations.MIGRATION_6_7,
-                    DatabaseMigrations.MIGRATION_7_8
+                    DatabaseMigrations.MIGRATION_7_8,
+                    DatabaseMigrations.MIGRATION_8_9
                 )
                 .build()
             try {
@@ -246,6 +247,24 @@ class DatabaseMigrationsTest {
                     assertTrue(cursor.moveToFirst())
                     assertEquals(1L, cursor.getLong(0))
                     assertEquals(11L, cursor.getLong(1))
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion8AndInitializesUsageData() {
+        helper.createDatabase(databaseName, 8).apply {
+            execSQL(
+                "INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName, description, isFavorite) VALUES (12, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored', '', 0)"
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 9, true, DatabaseMigrations.MIGRATION_8_9)
+            .use { database ->
+                database.query("SELECT lastUsedAtMillis, usageCount FROM memes WHERE id = 12").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertTrue(cursor.isNull(0))
+                    assertEquals(0L, cursor.getLong(1))
                 }
             }
     }

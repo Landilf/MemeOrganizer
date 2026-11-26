@@ -15,6 +15,8 @@ class MemeStorageMapper @Inject constructor() {
         addedAt = Instant.ofEpochMilli(entity.addedAtMillis),
         contentHash = entity.contentHash,
         storedFileName = entity.storedFileName,
-        isFavorite = entity.isFavorite
+        isFavorite = entity.isFavorite,
+        lastUsedAt = entity.lastUsedAtMillis?.let(Instant::ofEpochMilli),
+        usageCount = entity.usageCount
     )
 }

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import ru.landilf.memeorganizer.R
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.*
@@ -83,7 +84,13 @@ private enum class MainTab(val title: Int, val icon: ImageVector, val message: I
     Favorites(R.string.navigation_favorites, Icons.Default.Favorite, R.string.favorites_empty)
 }
 
+private enum class SystemAlbum(@StringRes val title: Int) {
+    RecentlyAdded(R.string.albums_recently_added),
+    RecentlyUsed(R.string.albums_recently_used)
+}
+
 private const val SEARCH_CANDIDATE_IDS_KEY = "search_candidate_ids"
+private const val RECENT_ALBUM_PERIOD_MILLIS = 30L * 24 * 60 * 60 * 1_000
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -319,6 +326,7 @@ private fun MainTabsScreen(
     var openedFromFavorites by rememberSaveable { mutableStateOf(false) }
     var openedFromAlbum by rememberSaveable { mutableStateOf(false) }
     var openedAlbumId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var openedSystemAlbum by rememberSaveable { mutableStateOf<SystemAlbum?>(null) }
     var albumDialogVisible by rememberSaveable { mutableStateOf(false) }
     var albumPickerVisible by rememberSaveable { mutableStateOf(false) }
     var albumName by rememberSaveable { mutableStateOf("") }
@@ -333,6 +341,14 @@ private fun MainTabsScreen(
     val albumRenameError by libraryViewModel.albumRenameError.collectAsStateWithLifecycle()
     val albumMemes by libraryViewModel.albumMemes.collectAsStateWithLifecycle()
     val openedAlbum = albums.firstOrNull { it.id == openedAlbumId }
+    val recentStartMillis = System.currentTimeMillis() - RECENT_ALBUM_PERIOD_MILLIS
+    val systemAlbumMemes = when (openedSystemAlbum) {
+        SystemAlbum.RecentlyAdded -> memes.filter { it.addedAt.toEpochMilli() >= recentStartMillis }
+        SystemAlbum.RecentlyUsed -> memes.filter { meme ->
+            meme.lastUsedAt?.toEpochMilli()?.let { it >= recentStartMillis } == true
+        }.sortedByDescending { it.lastUsedAt }
+        null -> emptyList()
+    }
     val albumWithOptions = albums.firstOrNull { it.id == albumOptionsId }
     val albumToRename = albums.firstOrNull { it.id == albumRenameId }
     val albumToDelete = albums.firstOrNull { it.id == albumDeleteId }
@@ -351,6 +367,7 @@ private fun MainTabsScreen(
         LaunchedEffect(openedId) { snackbar.currentSnackbarData?.dismiss() }
         val viewerMemes = when {
             openedFromAlbum -> albumMemes
+            openedSystemAlbum != null -> systemAlbumMemes
             openedFromFavorites -> memes.filter { it.isFavorite }
             else -> memes
         }
@@ -366,7 +383,7 @@ private fun MainTabsScreen(
     }
     if (openedAlbum != null) {
         AlbumContentsScreen(
-            album = openedAlbum,
+            title = openedAlbum.name,
             memes = albumMemes,
             onBack = {
                 openedAlbumId = null
@@ -379,6 +396,22 @@ private fun MainTabsScreen(
             },
             onRemoveMemes = { memeIds ->
                 libraryViewModel.removeMemesFromAlbum(openedAlbum.id, memeIds)
+            }
+        )
+        return
+    }
+    if (openedSystemAlbum != null) {
+        AlbumContentsScreen(
+            title = stringResource(openedSystemAlbum!!.title),
+            memes = systemAlbumMemes,
+            onBack = {
+                openedSystemAlbum = null
+                openedFromAlbum = false
+            },
+            onMemeClick = { meme ->
+                openedFromAlbum = false
+                openedFromFavorites = false
+                openedId = meme.id
             }
         )
         return
@@ -642,12 +675,28 @@ private fun MainTabsScreen(
                 MainTab.Favorites -> memes.filter { it.isFavorite }
                 MainTab.Albums -> emptyList()
             }
-            if (tabs[page] == MainTab.Albums && albums.isNotEmpty()) {
+            if (tabs[page] == MainTab.Albums) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    lazyItems(SystemAlbum.entries, key = { it.name }) { album ->
+                        Card(
+                            Modifier.fillMaxWidth().combinedClickable(
+                                onClick = {
+                                    openedSystemAlbum = album
+                                    openedAlbumId = null
+                                }
+                            )
+                        ) {
+                            Text(
+                                text = stringResource(album.title),
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
                     lazyItems(albums, key = { it.id }) { album ->
                         Card(
                             Modifier.fillMaxWidth().combinedClickable(

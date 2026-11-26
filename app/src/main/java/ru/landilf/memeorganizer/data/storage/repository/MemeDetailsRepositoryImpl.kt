@@ -71,6 +71,10 @@ class MemeDetailsRepositoryImpl @Inject constructor(
         check(memes.updateFavorite(memeId, isFavorite) == 1)
     }
 
+    override suspend fun markUsed(memeId: Long) = withContext(Dispatchers.IO) {
+        check(memes.markUsed(memeId, System.currentTimeMillis()) == 1)
+    }
+
     override suspend fun delete(memeIds: Set<Long>) = withContext(Dispatchers.IO) {
         for (id in memeIds) {
             val meme = memes.getById(id) ?: continue

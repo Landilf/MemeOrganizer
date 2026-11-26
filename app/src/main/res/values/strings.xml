@@ -45,6 +45,8 @@
     <string name="albums_remove_memes">Убрать из альбома</string>
     <string name="albums_remove_meme">Убрать мем из альбома</string>
     <string name="albums_manage">Управление альбомом</string>
+    <string name="albums_recently_added">Недавно добавленные</string>
+    <string name="albums_recently_used">Недавно использованные</string>
 
     <string name="favorites_empty">Здесь будут избранные мемы</string>
 
