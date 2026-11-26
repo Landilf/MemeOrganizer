@@ -112,7 +112,7 @@
     <string name="model_update_installing">Проверка и установка модели…</string>
     <string name="model_update_progress_percent">%1$d%%</string>
     <string name="developer_title">Для разработчиков</string>
-    <string name="developer_logs_description">Экспорт содержит технические события приложения и модели. В обычный экспорт не входят тексты запросов, описания, теги и медиа.</string>
+    <string name="developer_logs_description">Экспорт содержит события поиска и индексации, поисковые запросы, описания и теги. Медиафайлы добавляются только в полный Debug Bundle.</string>
     <string name="developer_include_media">Включить копии мемов</string>
     <string name="developer_include_media_warning">Копии мемов включены по умолчанию. Полный Debug Bundle может быть большим и содержит ваши медиафайлы. Передавайте его только тем, кому доверяете.</string>
     <string name="developer_export_logs">Выгрузить логи</string>

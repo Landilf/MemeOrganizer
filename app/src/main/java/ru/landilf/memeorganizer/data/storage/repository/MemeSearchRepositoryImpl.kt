@@ -388,6 +388,6 @@ class MemeSearchRepositoryImpl @Inject constructor(
 
     private companion object {
         const val COSINE_THRESHOLD = 0.25f
-        const val BM25_THRESHOLD = 2.0f
+        const val BM25_THRESHOLD = 3.5f
     }
 }
