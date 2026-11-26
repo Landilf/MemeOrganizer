@@ -9,6 +9,10 @@ import ru.landilf.memeorganizer.core.logging.LightLogStore
 import ru.landilf.memeorganizer.data.ml.TextEmbeddingEngine
 import ru.landilf.memeorganizer.data.ml.TextModelPackage
 import ru.landilf.memeorganizer.data.search.EmbeddingCodec
+import ru.landilf.memeorganizer.data.search.ExpandedSearchQuery
+import ru.landilf.memeorganizer.data.search.SearchRelevance
+import ru.landilf.memeorganizer.data.search.SearchRelevanceDecision
+import ru.landilf.memeorganizer.data.search.SearchQueryExpansion
 import ru.landilf.memeorganizer.data.search.SimpleBm25
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.data.storage.dao.SearchDocumentRow
@@ -62,6 +66,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
             if (query.isBlank()) return@withContext emptyList()
             val totalStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
             val modelPackage = installer.activePackage() ?: return@withContext emptyList()
+            val expandedQuery = SearchQueryExpansion.expand(query)
             val databaseStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
             val documents = embeddingDao.searchDocuments()
             val embeddings =
@@ -69,6 +74,8 @@ class MemeSearchRepositoryImpl @Inject constructor(
             val indexed =
                 documents.mapNotNull { document -> embeddings[document.memeId]?.let { document to it } }
             val databaseMs = elapsedMs(databaseStartedAt)
+            val corpusSize = indexed.size
+            val bm25Threshold = SearchRelevance.bm25Threshold(corpusSize)
             if (indexed.isEmpty()) {
                 recordEmptySearchImpression(
                     query = query,
@@ -77,7 +84,10 @@ class MemeSearchRepositoryImpl @Inject constructor(
                     modelMs = null,
                     denseMs = null,
                     bm25Ms = null,
-                    totalMs = elapsedMs(totalStartedAt)
+                    totalMs = elapsedMs(totalStartedAt),
+                    corpusSize = corpusSize,
+                    bm25Threshold = bm25Threshold,
+                    expandedQuery = expandedQuery
                 )
                 return@withContext emptyList()
             }
@@ -86,7 +96,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
             AppLogger.ml { "search.start query_length=${query.length} candidates=${indexed.size}" }
             val encodeStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
             val queryEmbedding =
-                TextEmbeddingEngine.open(modelPackage).use { it.encodeQuery(query) }
+                TextEmbeddingEngine.open(modelPackage).use { it.encodeQuery(expandedQuery.value) }
             val encodeMs = elapsedMs(encodeStartedAt)
             val documentsText = indexed.map { documentText(it.first) }
             val denseStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
@@ -98,10 +108,19 @@ class MemeSearchRepositoryImpl @Inject constructor(
             }
             val denseMs = elapsedMs(denseStartedAt)
             val bm25StartedAt = android.os.SystemClock.elapsedRealtimeNanos()
-            val bm25Scores = SimpleBm25(documentsText).scores(query).toList()
+            val bm25Scores = SimpleBm25(documentsText).scores(expandedQuery.value).toList()
             val bm25Ms = elapsedMs(bm25StartedAt)
-            val relevantIndexes = indexed.indices.filter { index ->
-                denseScores[index] >= COSINE_THRESHOLD || bm25Scores[index] >= BM25_THRESHOLD
+            val relevanceDecisions = indexed.mapIndexed { index, (document, _) ->
+                SearchRelevance.evaluate(
+                    query = query,
+                    tags = document.tags,
+                    corpusSize = corpusSize,
+                    denseScore = denseScores[index],
+                    bm25Score = bm25Scores[index]
+                )
+            }
+            val relevantIndexes = relevanceDecisions.indices.filter { index ->
+                relevanceDecisions[index].passed
             }
             if (relevantIndexes.isEmpty()) {
                 recordEmptySearchImpression(
@@ -112,15 +131,20 @@ class MemeSearchRepositoryImpl @Inject constructor(
                     denseMs = denseMs,
                     bm25Ms = bm25Ms,
                     totalMs = elapsedMs(totalStartedAt),
+                    corpusSize = corpusSize,
+                    bm25Threshold = bm25Threshold,
+                    expandedQuery = expandedQuery,
                     candidates = candidatesJson(
                         indexed = indexed,
                         denseScores = denseScores,
                         bm25Scores = bm25Scores,
+                        relevanceDecisions = relevanceDecisions,
                         candidateIndexes = diagnosticIndexes(
                             ranked = emptyList(),
                             totalCandidates = indexed.indices,
                             denseScores = denseScores,
-                            bm25Scores = bm25Scores
+                            bm25Scores = bm25Scores,
+                            bm25Threshold = bm25Threshold
                         ),
                         displayedRanks = emptyMap(),
                         normalizedDenseByIndex = emptyMap(),
@@ -166,8 +190,13 @@ class MemeSearchRepositoryImpl @Inject constructor(
                 "search_impression", JSONObject()
                 .put("search_id", searchId)
                 .put("query_text", query)
+                .put("expanded_query", expandedQuery.value)
+                .put("query_expansion_version", expandedQuery.version)
                 .put("model_release_tag", modelPackage.releaseTag)
-                .put("relevance_filter", relevanceFilterJson())
+                .put(
+                    "relevance_filter",
+                    relevanceFilterJson(corpusSize, bm25Threshold)
+                )
                 .put(
                     "latency_ms",
                     JSONObject().put("database_search", databaseMs).put(
@@ -187,11 +216,13 @@ class MemeSearchRepositoryImpl @Inject constructor(
                         indexed = indexed,
                         denseScores = denseScores,
                         bm25Scores = bm25Scores,
+                        relevanceDecisions = relevanceDecisions,
                         candidateIndexes = diagnosticIndexes(
                             ranked = ranked,
                             totalCandidates = indexed.indices,
                             denseScores = denseScores,
-                            bm25Scores = bm25Scores
+                            bm25Scores = bm25Scores,
+                            bm25Threshold = bm25Threshold
                         ),
                         displayedRanks = displayedRanks,
                         normalizedDenseByIndex = normalizedDenseByIndex,
@@ -301,15 +332,16 @@ class MemeSearchRepositoryImpl @Inject constructor(
         ranked: List<Int>,
         totalCandidates: IntRange,
         denseScores: List<Float>,
-        bm25Scores: List<Float>
+        bm25Scores: List<Float>,
+        bm25Threshold: Float
     ): List<Int> {
         val rankedSet = ranked.toHashSet()
         val rejected = totalCandidates
             .filterNot(rankedSet::contains)
             .sortedByDescending { index ->
                 maxOf(
-                    denseScores[index] / COSINE_THRESHOLD,
-                    bm25Scores[index] / BM25_THRESHOLD
+                    denseScores[index] / SearchRelevance.DENSE_THRESHOLD,
+                    bm25Scores[index] / bm25Threshold
                 )
             }
         return (ranked + rejected).take(MAX_LOGGED_CANDIDATES)
@@ -319,6 +351,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
         indexed: List<Pair<SearchDocumentRow, TextEmbeddingEntity>>,
         denseScores: List<Float>,
         bm25Scores: List<Float>,
+        relevanceDecisions: List<SearchRelevanceDecision>,
         candidateIndexes: List<Int>,
         displayedRanks: Map<Int, Int>,
         normalizedDenseByIndex: Map<Int, Float>,
@@ -370,10 +403,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
                         )
                         .put(
                             "relevance",
-                            relevanceDecisionJson(
-                                rawCosine = denseScores[index],
-                                rawBm25 = bm25Scores[index]
-                            )
+                            relevanceDecisionJson(relevanceDecisions[index])
                         )
                 )
             }
@@ -388,6 +418,9 @@ class MemeSearchRepositoryImpl @Inject constructor(
         denseMs: Long?,
         bm25Ms: Long?,
         totalMs: Long,
+        corpusSize: Int,
+        bm25Threshold: Float,
+        expandedQuery: ExpandedSearchQuery,
         candidates: JSONArray = JSONArray()
     ) {
         lightLog.record(
@@ -395,8 +428,10 @@ class MemeSearchRepositoryImpl @Inject constructor(
             JSONObject()
                 .put("search_id", UUID.randomUUID().toString())
                 .put("query_text", query)
+                .put("expanded_query", expandedQuery.value)
+                .put("query_expansion_version", expandedQuery.version)
                 .put("model_release_tag", modelPackage.releaseTag)
-                .put("relevance_filter", relevanceFilterJson())
+                .put("relevance_filter", relevanceFilterJson(corpusSize, bm25Threshold))
                 .put(
                     "latency_ms", JSONObject()
                         .put("database_search", databaseMs)
@@ -418,17 +453,20 @@ class MemeSearchRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun relevanceFilterJson() = JSONObject()
-        .put("raw_cosine_gte", COSINE_THRESHOLD)
-        .put("raw_bm25_gte", BM25_THRESHOLD)
+    private fun relevanceFilterJson(corpusSize: Int, bm25Threshold: Float) = JSONObject()
+        .put("corpus_size", corpusSize)
+        .put("raw_cosine_gte", SearchRelevance.DENSE_THRESHOLD)
+        .put("raw_bm25_gte", bm25Threshold)
 
-    private fun relevanceDecisionJson(rawCosine: Float, rawBm25: Float) = JSONObject()
-        .put("raw_cosine_gte", COSINE_THRESHOLD)
-        .put("raw_bm25_gte", BM25_THRESHOLD)
-        .put(
-            "passed_relevance_filter",
-            rawCosine >= COSINE_THRESHOLD || rawBm25 >= BM25_THRESHOLD
-        )
+    private fun relevanceDecisionJson(decision: SearchRelevanceDecision) = JSONObject()
+        .put("corpus_size", decision.corpusSize)
+        .put("raw_cosine_gte", SearchRelevance.DENSE_THRESHOLD)
+        .put("raw_bm25_gte", decision.bm25Threshold)
+        .put("exact_tag_match", decision.exactTagMatch)
+        .put("passed_by_dense", decision.passedByDense)
+        .put("passed_by_bm25", decision.passedByBm25)
+        .put("passed_by_exact_tag", decision.passedByExactTag)
+        .put("passed_relevance_filter", decision.passed)
 
     private suspend fun recordIndexingEvent(
         memeId: Long,
@@ -470,8 +508,6 @@ class MemeSearchRepositoryImpl @Inject constructor(
     }
 
     private companion object {
-        const val COSINE_THRESHOLD = 0.25f
-        const val BM25_THRESHOLD = 3.5f
         const val MAX_LOGGED_CANDIDATES = 20
     }
 }
