@@ -16,6 +16,7 @@
     <string name="settings_open">Настройки</string>
     <string name="settings_empty">Настройки появятся позже</string>
     <string name="settings_theme_components">Посмотреть элементы темы</string>
+    <string name="settings_developer">Для разработчиков</string>
 
     <string name="library_add">Добавить мемы</string>
     <string name="library_import_gallery">Галерея</string>
@@ -84,6 +85,25 @@
     <string name="settings_model_installing">Установка модели… Не закрывайте настройки.</string>
     <string name="settings_model_installed">Модель установлена.</string>
     <string name="settings_model_error">Не удалось установить или проверить модель. Проверьте архив и попробуйте снова.</string>
+    <string name="settings_model_check_update">Проверить обновления модели</string>
+    <string name="settings_model_update_checking">Проверка обновлений…</string>
+    <string name="settings_model_update_up_to_date">Установлена актуальная версия модели.</string>
+    <string name="settings_model_update_offline">Нет подключения к интернету.</string>
+    <string name="settings_model_update_installed">Новая модель установлена.</string>
+    <string name="settings_model_update_error">Не удалось проверить или установить обновление модели.</string>
+    <string name="model_update_available_title">Доступна новая модель</string>
+    <string name="model_update_available_message">Доступна модель %1$s (%2$.1f МБ). Скачать и установить?</string>
+    <string name="model_update_progress_title">Обновление модели</string>
+    <string name="model_update_downloading">Скачивание модели…</string>
+    <string name="model_update_installing">Проверка и установка модели…</string>
+    <string name="model_update_progress_percent">%1$d%%</string>
+    <string name="developer_title">Для разработчиков</string>
+    <string name="developer_logs_description">Экспорт содержит технические события приложения и модели. В обычный экспорт не входят тексты запросов, описания, теги и медиа.</string>
+    <string name="developer_include_media">Включить копии мемов</string>
+    <string name="developer_include_media_warning">Копии мемов включены по умолчанию. Полный Debug Bundle может быть большим и содержит ваши медиафайлы. Передавайте его только тем, кому доверяете.</string>
+    <string name="developer_export_logs">Выгрузить логи</string>
+    <string name="developer_export_success">Экспорт завершён.</string>
+    <string name="developer_export_error">Не удалось выгрузить логи.</string>
     <string name="search_open">Поиск</string>
     <string name="search_title">Поиск</string>
     <string name="search_query">Найдите мем по описанию или тегам</string>

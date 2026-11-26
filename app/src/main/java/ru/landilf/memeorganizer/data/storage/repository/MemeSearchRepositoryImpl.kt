@@ -1,8 +1,8 @@
 package ru.landilf.memeorganizer.data.storage.repository
 
-import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.ml.TextEmbeddingEngine
 import ru.landilf.memeorganizer.data.ml.TextModelPackage
@@ -29,12 +29,15 @@ class MemeSearchRepositoryImpl @Inject constructor(
 ) : MemeSearchRepository {
     override suspend fun prepare(): SearchPreparation = withContext(Dispatchers.IO) {
         val modelPackage = installer.activePackage() ?: return@withContext SearchPreparation(false, 0)
-        SearchPreparation(true, indexDocuments(modelPackage, embeddingDao.searchDocuments()))
+        val documents = embeddingDao.searchDocuments()
+        AppLogger.ml { "index.prepare documents=${documents.size}" }
+        SearchPreparation(true, indexDocuments(modelPackage, documents))
     }
 
     override suspend fun indexMeme(memeId: Long): Unit = withContext(Dispatchers.IO) {
         val modelPackage = installer.activePackage() ?: return@withContext
         val document = embeddingDao.searchDocuments().firstOrNull { it.memeId == memeId } ?: return@withContext
+        AppLogger.ml { "index.single meme_id=$memeId" }
         indexDocuments(modelPackage, listOf(document))
     }
 
@@ -46,6 +49,8 @@ class MemeSearchRepositoryImpl @Inject constructor(
         val indexed = documents.mapNotNull { document -> embeddings[document.memeId]?.let { document to it } }
         if (indexed.isEmpty()) return@withContext emptyList()
 
+        val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
+        AppLogger.ml { "search.start query_length=${query.length} candidates=${indexed.size}" }
         val queryEmbedding = TextEmbeddingEngine.open(modelPackage).use { it.encodeQuery(query) }
         val documentsText = indexed.map { documentText(it.first) }
         val denseScores = indexed.map { EmbeddingCodec.cosine(queryEmbedding, EmbeddingCodec.decode(it.second.embedding, modelPackage.dimension)) }
@@ -64,6 +69,9 @@ class MemeSearchRepositoryImpl @Inject constructor(
                 textScore = denseScores[index],
                 bm25Score = bm25Scores[index]
             )
+        }.also { results ->
+            val elapsedMs = (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000.0
+            AppLogger.ml { "search.done results=${results.size} elapsed_ms=%.2f".format(java.util.Locale.ROOT, elapsedMs) }
         }
     }
 
@@ -74,7 +82,12 @@ class MemeSearchRepositoryImpl @Inject constructor(
             text.isNotBlank() && (current?.modelSha256 != modelPackage.modelSha256 || current.contentFingerprint != fingerprint(text))
         }
         documents.filter { documentText(it).isBlank() }.forEach { embeddingDao.deleteByMemeId(it.memeId) }
-        if (pending.isEmpty()) return 0
+        if (pending.isEmpty()) {
+            AppLogger.ml { "index.skip documents=${documents.size}" }
+            return 0
+        }
+        val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
+        AppLogger.ml { "index.start pending=${pending.size}" }
         TextEmbeddingEngine.open(modelPackage).use { engine ->
             pending.forEach { document ->
                 val text = documentText(document)
@@ -89,6 +102,8 @@ class MemeSearchRepositoryImpl @Inject constructor(
                 )
             }
         }
+        val elapsedMs = (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000.0
+        AppLogger.ml { "index.done indexed=${pending.size} elapsed_ms=%.2f".format(java.util.Locale.ROOT, elapsedMs) }
         return pending.size
     }
 

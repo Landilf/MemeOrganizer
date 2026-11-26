@@ -20,6 +20,7 @@ interface MemeDao {
 
     @Query("SELECT * FROM memes WHERE id = :id") suspend fun getById(id: Long): MemeEntity?
     @Query("SELECT * FROM memes WHERE id IN (:ids)") suspend fun getByIds(ids: List<Long>): List<MemeEntity>
+    @Query("SELECT * FROM memes ORDER BY id") suspend fun getAll(): List<MemeEntity>
     @Query("UPDATE memes SET description = :description WHERE id = :id") suspend fun updateDescription(id: Long, description: String): Int
     @Query("DELETE FROM memes WHERE id = :id") suspend fun deleteById(id: Long): Int
 }

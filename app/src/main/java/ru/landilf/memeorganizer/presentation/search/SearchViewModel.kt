@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.usecase.search.PrepareMemeSearchUseCase
 import ru.landilf.memeorganizer.domain.usecase.search.SearchMemesUseCase
@@ -39,7 +40,8 @@ class SearchViewModel @Inject constructor(
                 _state.update { it.copy(modelAvailable = preparation.modelAvailable, preparing = false) }
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                AppLogger.mlError(error) { "search.prepare.failed" }
                 _state.update { it.copy(preparing = false, error = true) }
             }
         }
@@ -60,7 +62,8 @@ class SearchViewModel @Inject constructor(
                 _state.update { state -> if (state.query == query) state.copy(results = results, preparing = false) else state }
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                AppLogger.mlError(error) { "search.query.failed" }
                 _state.update { state -> if (state.query == query) state.copy(preparing = false, error = true) else state }
             }
         }

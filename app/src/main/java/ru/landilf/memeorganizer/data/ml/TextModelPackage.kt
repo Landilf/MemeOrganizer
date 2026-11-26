@@ -14,7 +14,8 @@ data class TextModelPackage(
     val paddingTokenId: Long,
     val modelSha256: String,
     val denseWeight: Float,
-    val bm25Weight: Float
+    val bm25Weight: Float,
+    val releaseTag: String?
 ) {
     companion object {
         /** Validates an already extracted package. This does not extract untrusted archives. */
@@ -55,10 +56,14 @@ data class TextModelPackage(
             val denseWeight = scoring.getDouble("dense_weight").toFloat()
             val bm25Weight = scoring.getDouble("bm25_weight").toFloat()
             require(denseWeight >= 0f && bm25Weight >= 0f && denseWeight + bm25Weight > 0f) { "Invalid hybrid weights" }
+            val releaseTag = manifest.optString("release_tag").takeIf { it.isNotBlank() }
+            require(releaseTag == null || RELEASE_TAG.matches(releaseTag)) { "Invalid release tag" }
             return TextModelPackage(
                 model, tokenizerFile, dimension, maxLength, prefixes.getString("query"), prefixes.getString("passage"),
-                paddingTokenId, actualHash, denseWeight, bm25Weight
+                paddingTokenId, actualHash, denseWeight, bm25Weight, releaseTag
             )
         }
+
+        private val RELEASE_TAG = Regex("v\\d+\\.\\d+\\.\\d+-mobile")
     }
 }

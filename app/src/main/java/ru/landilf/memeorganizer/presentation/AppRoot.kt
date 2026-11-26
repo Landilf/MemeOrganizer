@@ -57,6 +57,11 @@ import ru.landilf.memeorganizer.presentation.library.LibraryViewModel
 import ru.landilf.memeorganizer.presentation.library.LibraryViewer
 import ru.landilf.memeorganizer.presentation.settings.ModelSettingsViewModel
 import ru.landilf.memeorganizer.presentation.settings.ModelStatus
+import ru.landilf.memeorganizer.presentation.settings.ModelUpdateDialog
+import ru.landilf.memeorganizer.presentation.settings.ModelUpdateNotice
+import ru.landilf.memeorganizer.presentation.settings.ModelUpdateViewModel
+import ru.landilf.memeorganizer.presentation.settings.DeveloperScreen
+import ru.landilf.memeorganizer.presentation.settings.DeveloperViewModel
 import ru.landilf.memeorganizer.presentation.search.SearchScreen
 import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 
@@ -72,7 +77,10 @@ fun AppRoot() {
     val navController = rememberNavController()
     val importViewModel: ImportViewModel = hiltViewModel()
     val importState by importViewModel.state.collectAsStateWithLifecycle()
+    val modelUpdateViewModel: ModelUpdateViewModel = hiltViewModel()
+    val modelUpdateState by modelUpdateViewModel.state.collectAsStateWithLifecycle()
     MemeOrganizerTheme {
+        ModelUpdateDialog(modelUpdateState, modelUpdateViewModel::install, modelUpdateViewModel::postpone)
         NavHost(navController = navController, startDestination = "library") {
             composable("library") {
                 val libraryViewModel: LibraryViewModel = hiltViewModel()
@@ -129,7 +137,25 @@ fun AppRoot() {
                         Button(onClick = { modelPicker.launch(arrayOf("application/gzip", "application/x-gzip", "application/octet-stream", "application/x-tar", "*/*")) }, enabled = modelStatus != ModelStatus.Installing && modelStatus != ModelStatus.Checking) {
                             Text(stringResource(R.string.settings_model_choose))
                         }
+                        TextButton(
+                            onClick = { modelUpdateViewModel.checkForUpdates() },
+                            enabled = !modelUpdateState.checking && modelUpdateState.progress == null
+                        ) {
+                            Text(stringResource(R.string.settings_model_check_update))
+                        }
+                        val updateNotice = when (modelUpdateState.notice) {
+                            ModelUpdateNotice.None -> null
+                            ModelUpdateNotice.UpToDate -> R.string.settings_model_update_up_to_date
+                            ModelUpdateNotice.Offline -> R.string.settings_model_update_offline
+                            ModelUpdateNotice.Installed -> R.string.settings_model_update_installed
+                            ModelUpdateNotice.Error -> R.string.settings_model_update_error
+                        }
+                        if (modelUpdateState.checking) Text(stringResource(R.string.settings_model_update_checking))
+                        if (updateNotice != null) Text(stringResource(updateNotice))
                         if (BuildConfig.DEBUG) {
+                            TextButton(onClick = { navController.navigate("developer") }) {
+                                Text(stringResource(R.string.settings_developer))
+                            }
                             TextButton(onClick = { navController.navigate("components") }) {
                                 Text(stringResource(R.string.settings_theme_components))
                             }
@@ -139,6 +165,10 @@ fun AppRoot() {
             }
             composable("components") {
                 ComponentGallery(initialDark = isSystemInDarkTheme(), onBack = { navController.popBackStack() })
+            }
+            composable("developer") {
+                val developerViewModel: DeveloperViewModel = hiltViewModel()
+                DeveloperScreen(developerViewModel) { navController.popBackStack() }
             }
             composable("import") {
                 ImportScreen(importState, importViewModel, onClose = {
