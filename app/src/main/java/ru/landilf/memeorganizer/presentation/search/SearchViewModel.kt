@@ -11,8 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
-import ru.landilf.memeorganizer.core.logging.LightLogStore
-import org.json.JSONObject
+import ru.landilf.memeorganizer.core.logging.SearchActionLogWriter
 import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.usecase.search.PrepareMemeSearchUseCase
 import ru.landilf.memeorganizer.domain.usecase.search.SearchMemesUseCase
@@ -30,7 +29,7 @@ data class SearchUiState(
 class SearchViewModel @Inject constructor(
     private val prepareSearch: PrepareMemeSearchUseCase,
     private val searchMemes: SearchMemesUseCase,
-    private val lightLog: LightLogStore
+    private val searchActionLog: SearchActionLogWriter
 ) : ViewModel() {
     private val _state = MutableStateFlow(SearchUiState())
     val state = _state.asStateFlow()
@@ -62,14 +61,10 @@ class SearchViewModel @Inject constructor(
             ?.let { result ->
                 actedSearchIds += result.searchId
                 viewModelScope.launch {
-                    lightLog.record(
-                        "search_action", JSONObject()
-                            .put("search_id", result.searchId)
-                            .put("action_type", "reformulate")
-                            .put(
-                                "time_since_impression_ms",
-                                System.currentTimeMillis() - result.impressionAtMs
-                            )
+                    searchActionLog.record(
+                        searchId = result.searchId,
+                        actionType = "reformulate",
+                        impressionAtMs = result.impressionAtMs
                     )
                 }
             }
@@ -107,16 +102,12 @@ class SearchViewModel @Inject constructor(
     fun open(result: MemeSearchResult) {
         actedSearchIds += result.searchId
         viewModelScope.launch {
-            lightLog.record(
-                "search_action", JSONObject()
-                    .put("search_id", result.searchId)
-                    .put("action_type", "open")
-                    .put("file_hash", result.meme.contentHash)
-                    .put("rank", result.rank)
-                    .put(
-                        "time_since_impression_ms",
-                        System.currentTimeMillis() - result.impressionAtMs
-                    )
+            searchActionLog.record(
+                searchId = result.searchId,
+                actionType = "open",
+                impressionAtMs = result.impressionAtMs,
+                fileHash = result.meme.contentHash,
+                rank = result.rank
             )
         }
     }
@@ -126,14 +117,10 @@ class SearchViewModel @Inject constructor(
             ?.let { result ->
                 actedSearchIds += result.searchId
                 viewModelScope.launch {
-                    lightLog.record(
-                        "search_action", JSONObject()
-                            .put("search_id", result.searchId)
-                            .put("action_type", "abandon")
-                            .put(
-                                "time_since_impression_ms",
-                                System.currentTimeMillis() - result.impressionAtMs
-                            )
+                    searchActionLog.record(
+                        searchId = result.searchId,
+                        actionType = "abandon",
+                        impressionAtMs = result.impressionAtMs
                     )
                 }
             }

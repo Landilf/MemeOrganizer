@@ -71,8 +71,11 @@ import ru.landilf.memeorganizer.presentation.search.SearchScreen
 import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.domain.model.meme.Meme
-import ru.landilf.memeorganizer.presentation.library.AlbumCreationError
-import ru.landilf.memeorganizer.presentation.library.AlbumRenameError
+import ru.landilf.memeorganizer.presentation.library.AlbumNameError
+import ru.landilf.memeorganizer.presentation.library.AlbumNameDialog
+import ru.landilf.memeorganizer.presentation.library.AlbumPickerDialog
+import ru.landilf.memeorganizer.presentation.library.DeleteMemesConfirmationDialog
+import ru.landilf.memeorganizer.presentation.album.AlbumContentsScreen
 
 private enum class MainTab(val title: Int, val icon: ImageVector, val message: Int) {
     Albums(R.string.navigation_albums, Icons.Default.Collections, R.string.albums_empty),
@@ -293,106 +296,6 @@ fun AppRoot() {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
-@Composable
-private fun AlbumContentsScreen(
-    album: Album,
-    memes: List<Meme>,
-    onBack: () -> Unit,
-    onMemeClick: (Meme) -> Unit,
-    onRemoveMemes: (Set<Long>) -> Unit
-) {
-    val context = LocalContext.current
-    var selected by remember { mutableStateOf(setOf<Long>()) }
-    BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
-    BackHandler(enabled = selected.isEmpty(), onBack = onBack)
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    if (selected.isEmpty()) Text(album.name)
-                    else Text(stringResource(R.string.import_selected_count, selected.size))
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back_button)
-                        )
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            if (selected.isNotEmpty()) {
-                BottomAppBar {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        TextButton(onClick = {
-                            onRemoveMemes(selected)
-                            selected = emptySet()
-                        }) {
-                            Icon(Icons.Default.Delete, null)
-                            Text(stringResource(R.string.albums_remove_memes))
-                        }
-                    }
-                }
-            }
-        }
-    ) { padding ->
-        if (memes.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    stringResource(R.string.albums_contents_empty),
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
-        } else {
-            LazyVerticalGrid(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                columns = GridCells.Fixed(3),
-                contentPadding = PaddingValues(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(memes, key = { it.id }) { meme ->
-                    Box(
-                        Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(
-                            onClick = {
-                                if (selected.isEmpty()) onMemeClick(meme)
-                                else {
-                                    selected = if (meme.id in selected) {
-                                        selected - meme.id
-                                    } else {
-                                        selected + meme.id
-                                    }
-                                }
-                            },
-                            onLongClick = { selected = selected + meme.id }
-                        )
-                    ) {
-                        MediaThumbnail(
-                            Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")),
-                            meme.mimeType,
-                            Modifier.fillMaxSize()
-                        )
-                        if (meme.id in selected) Checkbox(
-                            checked = true,
-                            onCheckedChange = { selected = selected - meme.id },
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun MainTabsScreen(
@@ -482,51 +385,29 @@ private fun MainTabsScreen(
     }
     if (albumDialogVisible) {
         val errorText = when (albumCreationError) {
-            AlbumCreationError.EmptyName -> R.string.albums_create_error_empty
-            AlbumCreationError.Duplicate -> R.string.albums_create_error_duplicate
-            AlbumCreationError.Failed -> R.string.albums_create_error_failed
+            AlbumNameError.EmptyName -> R.string.albums_create_error_empty
+            AlbumNameError.Duplicate -> R.string.albums_create_error_duplicate
+            AlbumNameError.Failed -> R.string.albums_create_error_failed
             null -> null
         }
-        AlertDialog(
-            onDismissRequest = {
+        AlbumNameDialog(
+            title = R.string.albums_create_title,
+            confirmLabel = R.string.albums_create,
+            name = albumName,
+            errorText = errorText,
+            onNameChange = {
+                albumName = it
                 libraryViewModel.clearAlbumCreationError()
-                albumDialogVisible = false
             },
-            title = { Text(stringResource(R.string.albums_create_title)) },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = albumName,
-                        onValueChange = {
-                            albumName = it
-                            libraryViewModel.clearAlbumCreationError()
-                        },
-                        label = { Text(stringResource(R.string.albums_name)) },
-                        singleLine = true,
-                        isError = errorText != null
-                    )
-                    if (errorText != null) {
-                        Text(
-                            stringResource(errorText),
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
+            onConfirm = {
+                libraryViewModel.createAlbum(albumName) {
+                    albumName = ""
+                    albumDialogVisible = false
                 }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    libraryViewModel.createAlbum(albumName) {
-                        albumName = ""
-                        albumDialogVisible = false
-                    }
-                }) { Text(stringResource(R.string.albums_create)) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    libraryViewModel.clearAlbumCreationError()
-                    albumDialogVisible = false
-                }) { Text(stringResource(R.string.cancel_button)) }
+            onDismiss = {
+                libraryViewModel.clearAlbumCreationError()
+                albumDialogVisible = false
             }
         )
     }
@@ -553,50 +434,28 @@ private fun MainTabsScreen(
     }
     if (albumToRename != null) {
         val errorText = when (albumRenameError) {
-            AlbumRenameError.EmptyName -> R.string.albums_rename_error_empty
-            AlbumRenameError.Duplicate -> R.string.albums_rename_error_duplicate
-            AlbumRenameError.Failed -> R.string.albums_rename_error_failed
+            AlbumNameError.EmptyName -> R.string.albums_rename_error_empty
+            AlbumNameError.Duplicate -> R.string.albums_rename_error_duplicate
+            AlbumNameError.Failed -> R.string.albums_rename_error_failed
             null -> null
         }
-        AlertDialog(
-            onDismissRequest = {
+        AlbumNameDialog(
+            title = R.string.albums_rename_title,
+            confirmLabel = R.string.albums_rename,
+            name = renamedAlbumName,
+            errorText = errorText,
+            onNameChange = {
+                renamedAlbumName = it
                 libraryViewModel.clearAlbumRenameError()
-                albumRenameId = null
             },
-            title = { Text(stringResource(R.string.albums_rename_title)) },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = renamedAlbumName,
-                        onValueChange = {
-                            renamedAlbumName = it
-                            libraryViewModel.clearAlbumRenameError()
-                        },
-                        label = { Text(stringResource(R.string.albums_name)) },
-                        singleLine = true,
-                        isError = errorText != null
-                    )
-                    if (errorText != null) {
-                        Text(
-                            text = stringResource(errorText),
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
+            onConfirm = {
+                libraryViewModel.renameAlbum(albumToRename.id, renamedAlbumName) {
+                    albumRenameId = null
                 }
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    libraryViewModel.renameAlbum(albumToRename.id, renamedAlbumName) {
-                        albumRenameId = null
-                    }
-                }) { Text(stringResource(R.string.albums_rename)) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    libraryViewModel.clearAlbumRenameError()
-                    albumRenameId = null
-                }) { Text(stringResource(R.string.cancel_button)) }
+            onDismiss = {
+                libraryViewModel.clearAlbumRenameError()
+                albumRenameId = null
             }
         )
     }
@@ -620,49 +479,29 @@ private fun MainTabsScreen(
             }
         )
     }
-    if (albumPickerVisible) AlertDialog(
-        onDismissRequest = { albumPickerVisible = false },
-        title = { Text(stringResource(R.string.albums_add_memes_title)) },
-        text = {
-            LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                lazyItems(albums, key = { it.id }) { album ->
-                    TextButton(
-                        onClick = {
-                            libraryViewModel.addMemesToAlbum(album.id, selected) {
-                                selected = emptySet()
-                                albumPickerVisible = false
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(album.name, modifier = Modifier.fillMaxWidth())
-                    }
+    if (albumPickerVisible) {
+        AlbumPickerDialog(
+            albums = albums,
+            onAlbumSelected = { album ->
+                libraryViewModel.addMemesToAlbum(album.id, selected) {
+                    selected = emptySet()
+                    albumPickerVisible = false
                 }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = { albumPickerVisible = false }) {
-                Text(stringResource(R.string.cancel_button))
-            }
-        }
-    )
+            },
+            onDismiss = { albumPickerVisible = false }
+        )
+    }
     BackHandler(enabled = selected.isNotEmpty()) { selected = emptySet() }
-    if (confirmDelete) AlertDialog(
-        onDismissRequest = { confirmDelete = false },
-        title = { Text(stringResource(R.string.library_delete_title)) },
-        text = { Text(stringResource(R.string.library_delete_message)) },
-        dismissButton = {
-            TextButton(onClick = {
-                libraryViewModel.delete(selected); selected = emptySet(); confirmDelete = false
-            }) { Text(stringResource(R.string.yes_button)) }
-        },
-        confirmButton = {
-            TextButton(onClick = {
+    if (confirmDelete) {
+        DeleteMemesConfirmationDialog(
+            onConfirm = {
+                libraryViewModel.delete(selected)
+                selected = emptySet()
                 confirmDelete = false
-            }) { Text(stringResource(R.string.no_button)) }
-        }
-    )
+            },
+            onDismiss = { confirmDelete = false }
+        )
+    }
     fun acceptUris(uris: List<Uri>) {
         if (uris.isEmpty()) return
         uris.forEach { uri ->

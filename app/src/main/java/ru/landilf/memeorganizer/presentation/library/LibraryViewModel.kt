@@ -27,13 +27,11 @@ import ru.landilf.memeorganizer.domain.usecase.album.RenameAlbumUseCase
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
-import ru.landilf.memeorganizer.core.logging.LightLogStore
-import org.json.JSONObject
+import ru.landilf.memeorganizer.core.logging.SearchActionLogWriter
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import javax.inject.Inject
 
-enum class AlbumCreationError { EmptyName, Duplicate, Failed }
-enum class AlbumRenameError { EmptyName, Duplicate, Failed }
+enum class AlbumNameError { EmptyName, Duplicate, Failed }
 
 data class EditState(
     val memeId: Long,
@@ -60,7 +58,7 @@ class LibraryViewModel @Inject constructor(
     private val deleteAlbumUseCase: DeleteAlbumUseCase,
     private val removeMemesFromAlbumUseCase: RemoveMemesFromAlbumUseCase,
     private val searchRepository: MemeSearchRepository,
-    private val lightLog: LightLogStore
+    private val searchActionLog: SearchActionLogWriter
 ) : ViewModel() {
     val memes =
         observeMemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -78,9 +76,9 @@ class LibraryViewModel @Inject constructor(
     val edit = _edit.asStateFlow()
     private val _deleteError = MutableStateFlow(false)
     val deleteError = _deleteError.asStateFlow()
-    private val _albumCreationError = MutableStateFlow<AlbumCreationError?>(null)
+    private val _albumCreationError = MutableStateFlow<AlbumNameError?>(null)
     val albumCreationError = _albumCreationError.asStateFlow()
-    private val _albumRenameError = MutableStateFlow<AlbumRenameError?>(null)
+    private val _albumRenameError = MutableStateFlow<AlbumNameError?>(null)
     val albumRenameError = _albumRenameError.asStateFlow()
 
     fun openEditor(id: Long) {
@@ -176,14 +174,14 @@ class LibraryViewModel @Inject constructor(
         _albumCreationError.value = null
         viewModelScope.launch {
             try {
-                if (createNewAlbum(name)) onCreated() else _albumCreationError.value = AlbumCreationError.Duplicate
+                if (createNewAlbum(name)) onCreated() else _albumCreationError.value = AlbumNameError.Duplicate
             } catch (e: IllegalArgumentException) {
-                _albumCreationError.value = AlbumCreationError.EmptyName
+                _albumCreationError.value = AlbumNameError.EmptyName
             } catch (e: CancellationException) {
                 throw e
             } catch (error: Exception) {
                 AppLogger.app { "album.create.failed type=${error.javaClass.simpleName}" }
-                _albumCreationError.value = AlbumCreationError.Failed
+                _albumCreationError.value = AlbumNameError.Failed
             }
         }
     }
@@ -199,15 +197,15 @@ class LibraryViewModel @Inject constructor(
                 if (renameAlbumUseCase(albumId, name)) {
                     onRenamed()
                 } else {
-                    _albumRenameError.value = AlbumRenameError.Duplicate
+                    _albumRenameError.value = AlbumNameError.Duplicate
                 }
             } catch (e: IllegalArgumentException) {
-                _albumRenameError.value = AlbumRenameError.EmptyName
+                _albumRenameError.value = AlbumNameError.EmptyName
             } catch (e: CancellationException) {
                 throw e
             } catch (error: Exception) {
                 AppLogger.app { "album.rename.failed type=${error.javaClass.simpleName}" }
-                _albumRenameError.value = AlbumRenameError.Failed
+                _albumRenameError.value = AlbumNameError.Failed
             }
         }
     }
@@ -281,13 +279,12 @@ class LibraryViewModel @Inject constructor(
         actionType: String
     ) {
         viewModelScope.launch {
-            lightLog.record(
-                "search_action", JSONObject()
-                    .put("search_id", searchId)
-                    .put("action_type", actionType)
-                    .put("file_hash", meme.contentHash)
-                    .put("rank", rank)
-                    .put("time_since_impression_ms", System.currentTimeMillis() - impressionAtMs)
+            searchActionLog.record(
+                searchId = searchId,
+                actionType = actionType,
+                impressionAtMs = impressionAtMs,
+                fileHash = meme.contentHash,
+                rank = rank
             )
         }
     }

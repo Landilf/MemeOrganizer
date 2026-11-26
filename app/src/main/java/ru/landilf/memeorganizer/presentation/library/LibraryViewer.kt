@@ -78,47 +78,27 @@ fun LibraryViewer(
             pager.scrollToPage(memes.lastIndex)
         }
     }
-    if (pendingDelete != null) AlertDialog(
-        onDismissRequest = { pendingDelete = null },
-        title = { Text(stringResource(R.string.library_delete_title)) },
-        text = { Text(stringResource(R.string.library_delete_message)) },
-        dismissButton = {
-            TextButton(onClick = {
-                viewModel.delete(setOfNotNull(pendingDelete)); pendingDelete = null
-            }) { Text(stringResource(R.string.yes_button)) }
-        },
-        confirmButton = {
-            TextButton(onClick = {
+    if (pendingDelete != null) {
+        DeleteMemesConfirmationDialog(
+            onConfirm = {
+                viewModel.delete(setOfNotNull(pendingDelete))
                 pendingDelete = null
-            }) { Text(stringResource(R.string.no_button)) }
-        }
-    )
+            },
+            onDismiss = { pendingDelete = null }
+        )
+    }
     if (albumPickerVisible) {
-        AlertDialog(
-            onDismissRequest = { albumPickerVisible = false },
-            title = { Text(stringResource(R.string.albums_add_memes_title)) },
-            text = {
-                Column {
-                    albums.filterNot { it.id == currentAlbumId }.forEach { album ->
-                        TextButton(
-                            onClick = {
-                                memes.getOrNull(pager.currentPage)?.let { meme ->
-                                    viewModel.addMemesToAlbum(album.id, setOf(meme.id)) {
-                                        albumPickerVisible = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(album.name, modifier = Modifier.fillMaxWidth()) }
+        AlbumPickerDialog(
+            albums = albums,
+            excludedAlbumId = currentAlbumId,
+            onAlbumSelected = { album ->
+                memes.getOrNull(pager.currentPage)?.let { meme ->
+                    viewModel.addMemesToAlbum(album.id, setOf(meme.id)) {
+                        albumPickerVisible = false
                     }
                 }
             },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { albumPickerVisible = false }) {
-                    Text(stringResource(R.string.cancel_button))
-                }
-            }
+            onDismiss = { albumPickerVisible = false }
         )
     }
     edit?.let {
