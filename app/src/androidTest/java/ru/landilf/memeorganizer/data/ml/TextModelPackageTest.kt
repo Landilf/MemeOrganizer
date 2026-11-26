@@ -26,7 +26,7 @@ class TextModelPackageTest {
 
     private fun writeManifest(modelPath: String = "model.onnx", hash: String = sha256() ) {
         File(directory, "preset_manifest.json").writeText(
-            """{"schema_version":"1.1.0","component":"text_encoder","model_file":"$modelPath","embedding_dimension":384,"max_sequence_length":64,"tokenizer":{"recommended_asset":"tokenizer.json","max_length":64},"prefixes":{"query":"query: ","passage":"passage: "},"provenance":{"onnx_sha256":"$hash"}}"""
+            """{"schema_version":"1.1.0","component":"text_encoder","model_file":"$modelPath","embedding_dimension":384,"max_sequence_length":64,"tokenizer":{"recommended_asset":"tokenizer.json","max_length":64,"padding":"max_length","truncation":true,"special_token_ids":{"pad":1}},"prefixes":{"query":"query: ","passage":"passage: "},"hybrid_scoring":{"dense_weight":0.501,"bm25_weight":0.499},"provenance":{"onnx_sha256":"$hash"}}"""
         )
     }
 

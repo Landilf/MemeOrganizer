@@ -18,6 +18,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
@@ -54,6 +55,10 @@ import ru.landilf.memeorganizer.presentation.importing.ImportScreen
 import ru.landilf.memeorganizer.presentation.importing.ImportViewModel
 import ru.landilf.memeorganizer.presentation.library.LibraryViewModel
 import ru.landilf.memeorganizer.presentation.library.LibraryViewer
+import ru.landilf.memeorganizer.presentation.settings.ModelSettingsViewModel
+import ru.landilf.memeorganizer.presentation.settings.ModelStatus
+import ru.landilf.memeorganizer.presentation.search.SearchScreen
+import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 
 private enum class MainTab(val title: Int, val icon: ImageVector, val message: Int) {
     Albums(R.string.navigation_albums, Icons.Default.Collections, R.string.albums_empty),
@@ -74,6 +79,7 @@ fun AppRoot() {
                 val memes by libraryViewModel.memes.collectAsStateWithLifecycle()
                 MainTabsScreen(
                     onSettingsClick = { navController.navigate("settings") },
+                    onSearchClick = { navController.navigate("search") },
                     onFilesSelected = { sources -> importViewModel.setSources(sources); navController.navigate("import") },
                     memes = memes,
                     libraryViewModel = libraryViewModel,
@@ -81,7 +87,28 @@ fun AppRoot() {
                     onSummaryShown = importViewModel::clearSummary
                 )
             }
+            composable("search") {
+                val searchViewModel: SearchViewModel = hiltViewModel()
+                val searchState by searchViewModel.state.collectAsStateWithLifecycle()
+                SearchScreen(
+                    state = searchState,
+                    onQueryChanged = searchViewModel::updateQuery,
+                    onBack = { navController.popBackStack() },
+                    onMemeClick = { id -> navController.navigate("viewer/$id") }
+                )
+            }
+            composable("viewer/{memeId}") { entry ->
+                val libraryViewModel: LibraryViewModel = hiltViewModel()
+                val memes by libraryViewModel.memes.collectAsStateWithLifecycle()
+                val memeId = entry.arguments?.getString("memeId")?.toLongOrNull()
+                if (memeId != null) LibraryViewer(memes, memeId, libraryViewModel) { navController.popBackStack() }
+            }
             composable("settings") {
+                val modelViewModel: ModelSettingsViewModel = hiltViewModel()
+                val modelStatus by modelViewModel.status.collectAsStateWithLifecycle()
+                val modelPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    if (uri != null) modelViewModel.install(uri)
+                }
                 Scaffold(topBar = {
                     TopAppBar(title = {}, navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
@@ -90,7 +117,18 @@ fun AppRoot() {
                     })
                 }) { padding ->
                     Column(modifier = Modifier.padding(padding).padding(24.dp)) {
-                        Text(stringResource(R.string.settings_empty))
+                        Text(stringResource(R.string.settings_text_model), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(when (modelStatus) {
+                            ModelStatus.Checking -> R.string.settings_model_checking
+                            ModelStatus.NotInstalled -> R.string.settings_model_not_installed
+                            ModelStatus.Installing -> R.string.settings_model_installing
+                            ModelStatus.Installed -> R.string.settings_model_installed
+                            ModelStatus.Error -> R.string.settings_model_error
+                        }))
+                        if (modelStatus == ModelStatus.Installing || modelStatus == ModelStatus.Checking) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Button(onClick = { modelPicker.launch(arrayOf("application/gzip", "application/x-gzip", "application/octet-stream", "application/x-tar", "*/*")) }, enabled = modelStatus != ModelStatus.Installing && modelStatus != ModelStatus.Checking) {
+                            Text(stringResource(R.string.settings_model_choose))
+                        }
                         if (BuildConfig.DEBUG) {
                             TextButton(onClick = { navController.navigate("components") }) {
                                 Text(stringResource(R.string.settings_theme_components))
@@ -117,6 +155,7 @@ fun AppRoot() {
 @Composable
 private fun MainTabsScreen(
     onSettingsClick: () -> Unit,
+    onSearchClick: () -> Unit,
     onFilesSelected: (List<String>) -> Unit,
     memes: List<ru.landilf.memeorganizer.domain.model.meme.Meme>,
     libraryViewModel: LibraryViewModel,
@@ -165,9 +204,13 @@ private fun MainTabsScreen(
         topBar = {
             TopAppBar(title = {}, actions = {
                 if (selected.isNotEmpty()) Text(stringResource(R.string.import_selected_count, selected.size), Modifier.padding(end = 20.dp))
-                else
-                IconButton(onClick = onSettingsClick) {
-                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_open))
+                else {
+                    IconButton(onClick = onSearchClick) {
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.search_open))
+                    }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_open))
+                    }
                 }
             })
         },

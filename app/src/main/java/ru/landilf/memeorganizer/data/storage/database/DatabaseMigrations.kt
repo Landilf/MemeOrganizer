@@ -4,6 +4,24 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object DatabaseMigrations {
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `text_embeddings` (
+                    `memeId` INTEGER NOT NULL,
+                    `modelSha256` TEXT NOT NULL,
+                    `contentFingerprint` TEXT NOT NULL,
+                    `embedding` BLOB NOT NULL,
+                    `indexedAtMillis` INTEGER NOT NULL,
+                    PRIMARY KEY(`memeId`),
+                    FOREIGN KEY(`memeId`) REFERENCES `memes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_text_embeddings_modelSha256` ON `text_embeddings` (`modelSha256`)")
+        }
+    }
     val MIGRATION_2_3 = object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE `memes` ADD COLUMN `description` TEXT NOT NULL DEFAULT ''")

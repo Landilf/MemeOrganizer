@@ -56,7 +56,7 @@ class DatabaseMigrationsTest {
             }
             helper.runMigrationsAndValidate(databaseName, 2, true, DatabaseMigrations.MIGRATION_1_2).close()
             val database = Room.databaseBuilder(context, AppDatabase::class.java, databaseName)
-                .addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_2_3)
+                .addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_2_3, DatabaseMigrations.MIGRATION_3_4)
                 .build()
             try {
                 val memes = database.memeDao().observeMemes().first()
@@ -112,6 +112,24 @@ class DatabaseMigrationsTest {
                 assertEquals("", cursor.getString(4))
             }
             database.query("SELECT COUNT(*) FROM tags").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(0, cursor.getInt(0))
+            }
+        }
+    }
+
+    @Test
+    fun migratesVersion3AndKeepsUserData() {
+        helper.createDatabase(databaseName, 3).apply {
+            execSQL("INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName, description) VALUES (5, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored', 'кот в капюшоне')")
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 4, true, DatabaseMigrations.MIGRATION_3_4).use { database ->
+            database.query("SELECT description FROM memes WHERE id = 5").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("кот в капюшоне", cursor.getString(0))
+            }
+            database.query("SELECT COUNT(*) FROM text_embeddings").use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 assertEquals(0, cursor.getInt(0))
             }

@@ -77,4 +77,17 @@
     <string name="library_delete_message">Мемы и их копии в приложении будут удалены. Исходные файлы останутся на месте.</string>
     <string name="library_delete_error">Не удалось удалить все выбранные мемы.</string>
     <string name="ok_button">Понятно</string>
+    <string name="settings_text_model">Текстовая модель</string>
+    <string name="settings_model_choose">Выбрать архив модели</string>
+    <string name="settings_model_checking">Проверка модели…</string>
+    <string name="settings_model_not_installed">Модель не установлена</string>
+    <string name="settings_model_installing">Установка модели… Не закрывайте настройки.</string>
+    <string name="settings_model_installed">Модель установлена.</string>
+    <string name="settings_model_error">Не удалось установить или проверить модель. Проверьте архив и попробуйте снова.</string>
+    <string name="search_open">Поиск</string>
+    <string name="search_title">Поиск</string>
+    <string name="search_query">Найдите мем по описанию или тегам</string>
+    <string name="search_model_not_installed">Установите текстовую модель в настройках, чтобы искать по описаниям и тегам.</string>
+    <string name="search_empty">Ничего не найдено</string>
+    <string name="search_error">Не удалось подготовить поиск. Попробуйте открыть его снова.</string>
 </resources>

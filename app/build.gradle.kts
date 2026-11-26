@@ -26,6 +26,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_STL=c++_shared"
+            }
+        }
     }
 
     buildTypes {
@@ -44,6 +49,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
     sourceSets {
         getByName("androidTest") {
@@ -77,6 +87,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.onnxruntime.android)
+    implementation(libs.commons.compress)
+    implementation(libs.djl.tokenizers)
+    runtimeOnly(libs.djl.tokenizer.native)
 
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)

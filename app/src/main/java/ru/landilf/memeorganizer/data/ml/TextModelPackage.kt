@@ -11,7 +11,10 @@ data class TextModelPackage(
     val maxLength: Int,
     val queryPrefix: String,
     val passagePrefix: String,
-    val modelSha256: String
+    val paddingTokenId: Long,
+    val modelSha256: String,
+    val denseWeight: Float,
+    val bm25Weight: Float
 ) {
     companion object {
         /** Validates an already extracted package. This does not extract untrusted archives. */
@@ -44,8 +47,18 @@ data class TextModelPackage(
             val dimension = manifest.getInt("embedding_dimension")
             val maxLength = manifest.getInt("max_sequence_length")
             require(dimension in 1..8192 && maxLength in 1..4096 && tokenizer.getInt("max_length") == maxLength)
+            require(tokenizer.getString("padding") == "max_length" && tokenizer.getBoolean("truncation")) { "Unsupported tokenizer configuration" }
+            val paddingTokenId = tokenizer.getJSONObject("special_token_ids").getLong("pad")
+            require(paddingTokenId >= 0)
             val prefixes = manifest.getJSONObject("prefixes")
-            return TextModelPackage(model, tokenizerFile, dimension, maxLength, prefixes.getString("query"), prefixes.getString("passage"), actualHash)
+            val scoring = manifest.getJSONObject("hybrid_scoring")
+            val denseWeight = scoring.getDouble("dense_weight").toFloat()
+            val bm25Weight = scoring.getDouble("bm25_weight").toFloat()
+            require(denseWeight >= 0f && bm25Weight >= 0f && denseWeight + bm25Weight > 0f) { "Invalid hybrid weights" }
+            return TextModelPackage(
+                model, tokenizerFile, dimension, maxLength, prefixes.getString("query"), prefixes.getString("passage"),
+                paddingTokenId, actualHash, denseWeight, bm25Weight
+            )
         }
     }
 }

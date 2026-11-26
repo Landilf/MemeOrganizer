@@ -14,6 +14,7 @@ import ru.landilf.memeorganizer.domain.usecase.meme.ObserveMemesUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
+import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 import javax.inject.Inject
 
 data class EditState(val memeId: Long, val description: String = "", val tags: List<String> = emptyList(), val original: MemeDetails? = null, val loading: Boolean = true, val saving: Boolean = false, val error: Boolean = false)
@@ -22,7 +23,8 @@ data class EditState(val memeId: Long, val description: String = "", val tags: L
 class LibraryViewModel @Inject constructor(
     observeMemes: ObserveMemesUseCase,
     private val detailsRepository: MemeDetailsRepository,
-    private val saveDetails: SaveMemeDetailsUseCase
+    private val saveDetails: SaveMemeDetailsUseCase,
+    private val searchRepository: MemeSearchRepository
 ) : ViewModel() {
     val memes = observeMemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val tags = detailsRepository.observeTags().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -53,6 +55,7 @@ class LibraryViewModel @Inject constructor(
             try {
                 saveDetails(current.memeId, MemeDetails(current.description, current.tags))
                 _edit.update { if (it?.memeId == current.memeId) null else it }
+                launch { searchRepository.indexMeme(current.memeId) }
             } catch (e: CancellationException) { throw e } catch (_: Exception) {
                 _edit.update { if (it?.memeId == current.memeId) it.copy(saving = false, error = true) else it }
             }
