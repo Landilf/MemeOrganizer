@@ -52,8 +52,9 @@ class GitHubModelUpdater @Inject constructor(
         if (!isOnline()) return@withContext ModelUpdateCheck.Offline
         val release = latestRelease()
         val preferences = context.modelUpdateDataStore.data.first()
-        val installedTag = preferences[INSTALLED_TAG] ?: installer.activePackage()?.releaseTag?.also { tag ->
-            context.modelUpdateDataStore.edit { it[INSTALLED_TAG] = tag }
+        val installedTag = installer.activePackage()?.releaseTag
+        context.modelUpdateDataStore.edit { stored ->
+            if (installedTag == null) stored.remove(INSTALLED_TAG) else stored[INSTALLED_TAG] = installedTag
         }
         val dismissedTag = preferences[DISMISSED_TAG]
         if (installedTag != null && compareVersions(release.tag, installedTag) <= 0) return@withContext ModelUpdateCheck.UpToDate

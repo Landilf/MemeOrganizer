@@ -29,8 +29,15 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
         if (!pointer.baseFile.isFile) return@withContext null
         val id = pointer.readFully().toString(Charsets.UTF_8)
         require(id.matches(Regex("[0-9a-f-]{36}")))
-        TextModelPackage.load(File(directory, id)).also { model ->
-            AppLogger.ml { "model.active tag=${model.releaseTag ?: "unknown"} sha=${model.modelSha256.take(12)} dim=${model.dimension}" }
+        try {
+            TextModelPackage.load(File(directory, id)).also { model ->
+                AppLogger.ml { "model.active tag=${model.releaseTag} sha=${model.modelSha256.take(12)} dim=${model.dimension}" }
+            }
+        } catch (error: Exception) {
+            pointer.delete()
+            File(directory, id).deleteRecursively()
+            AppLogger.ml { "model.active.invalid type=${error.javaClass.simpleName}" }
+            null
         }
     }
 
@@ -104,7 +111,7 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
             try { output.write(id.toByteArray(Charsets.UTF_8)); pointer.finishWrite(output) } catch (e: Exception) { pointer.failWrite(output); throw e }
             activated = true
             removeInactivePackages(activeId = id)
-            AppLogger.ml { "model.install.done tag=${model.releaseTag ?: "unknown"} sha=${model.modelSha256.take(12)} dim=${model.dimension}" }
+            AppLogger.ml { "model.install.done tag=${model.releaseTag} sha=${model.modelSha256.take(12)} dim=${model.dimension}" }
             return model
         } finally {
             if (!activated) staged.deleteRecursively()

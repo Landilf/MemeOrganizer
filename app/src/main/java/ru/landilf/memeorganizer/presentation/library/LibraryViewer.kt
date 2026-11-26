@@ -2,6 +2,7 @@ package ru.landilf.memeorganizer.presentation.library
 
 import android.net.Uri
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
+import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.presentation.common.FullMedia
 import java.io.File
@@ -41,10 +43,22 @@ fun LibraryViewer(
     val suggestions by viewModel.tags.collectAsStateWithLifecycle()
     var visible by rememberSaveable { mutableStateOf(true) }
     var pendingDelete by rememberSaveable { mutableStateOf<Long?>(null) }
+    var hasShownMedia by remember(initialId) { mutableStateOf(false) }
     val context = LocalContext.current
     BackHandler(enabled = edit == null) { onBack() }
-    LaunchedEffect(memes.isEmpty()) { if (memes.isEmpty()) onBack() }
-    if (memes.isEmpty()) return
+    LaunchedEffect(memes.isNotEmpty()) {
+        if (memes.isNotEmpty()) {
+            hasShownMedia = true
+        } else if (hasShownMedia) {
+            onBack()
+        }
+    }
+    if (memes.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
     val pager = rememberPagerState(initialPage = memes.indexOfFirst { it.id == initialId }.coerceAtLeast(0), pageCount = { memes.size })
     if (pendingDelete != null) AlertDialog(
         onDismissRequest = { pendingDelete = null },
@@ -66,9 +80,16 @@ fun LibraryViewer(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         IconButton(onClick = { memes.getOrNull(pager.currentPage)?.let { viewModel.openEditor(it.id) } }) { Icon(Icons.Default.Edit, stringResource(R.string.edit_title)) }
                         IconButton(onClick = {
-                            memes.getOrNull(pager.currentPage)?.takeIf { copyMemeToClipboard(context, it) }?.let {
-                                Toast.makeText(context, R.string.library_copy_success, Toast.LENGTH_SHORT).show()
-                                onCopy(it)
+                            memes.getOrNull(pager.currentPage)?.let { meme ->
+                                copyMemeToClipboard(context, meme)
+                                    .onSuccess {
+                                        Toast.makeText(context, R.string.library_copy_success, Toast.LENGTH_SHORT).show()
+                                        onCopy(meme)
+                                    }
+                                    .onFailure { error ->
+                                        AppLogger.app { "media.copy.failed type=${error.javaClass.simpleName}" }
+                                        Toast.makeText(context, R.string.library_copy_error, Toast.LENGTH_SHORT).show()
+                                    }
                             }
                         }) { Icon(Icons.Default.ContentCopy, stringResource(R.string.library_copy)) }
                         IconButton(onClick = { pendingDelete = memes.getOrNull(pager.currentPage)?.id }) { Icon(Icons.Default.Delete, stringResource(R.string.library_delete)) }
@@ -79,10 +100,14 @@ fun LibraryViewer(
     }
 }
 
-private fun copyMemeToClipboard(context: android.content.Context, meme: Meme): Boolean = runCatching {
+private fun copyMemeToClipboard(context: android.content.Context, meme: Meme): Result<Unit> = runCatching {
     val file = File(File(context.filesDir, "memes"), meme.storedFileName)
     check(file.isFile)
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
     val clipboard = context.getSystemService(ClipboardManager::class.java)
-    clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, meme.fileName, uri))
-}.isSuccess
+    val clip = ClipData(
+        ClipDescription(meme.fileName, arrayOf(meme.mimeType)),
+        ClipData.Item(uri)
+    )
+    clipboard.setPrimaryClip(clip)
+}

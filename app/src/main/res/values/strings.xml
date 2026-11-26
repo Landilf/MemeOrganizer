@@ -76,6 +76,7 @@
     <string name="library_delete">Удалить мем</string>
     <string name="library_copy">Копировать</string>
     <string name="library_copy_success">Мем скопирован</string>
+    <string name="library_copy_error">Не удалось скопировать мем</string>
     <string name="library_delete_title">Удалить из библиотеки?</string>
     <string name="library_delete_message">Мемы и их копии в приложении будут удалены. Исходные файлы останутся на месте.</string>
     <string name="library_delete_error">Не удалось удалить все выбранные мемы.</string>
@@ -111,6 +112,11 @@
     <string name="developer_clear_logs_message">Будут удалены Light Log, технические логи и их показатели состояния только на этом устройстве. Уже выгруженные архивы не изменятся.</string>
     <string name="developer_clear_logs_success">Локальные логи очищены.</string>
     <string name="developer_clear_logs_error">Не удалось очистить локальные логи.</string>
+    <string name="developer_reindex_all">Переиндексировать библиотеку</string>
+    <string name="developer_reindexing">Переиндексация библиотеки…</string>
+    <string name="developer_reindex_success">Переиндексация завершена: %1$d мем(ов) обработано.</string>
+    <string name="developer_reindex_model_unavailable">Установите пакет модели, чтобы запустить переиндексацию.</string>
+    <string name="developer_reindex_error">Не удалось переиндексировать библиотеку.</string>
     <string name="search_open">Поиск</string>
     <string name="search_title">Поиск</string>
     <string name="search_query">Найдите мем по описанию или тегам</string>

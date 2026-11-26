@@ -232,6 +232,7 @@ private fun MainTabsScreen(
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
     if (deleteError) AlertDialog(onDismissRequest = libraryViewModel::clearDeleteError, title = { Text(stringResource(R.string.library_delete_error)) }, confirmButton = { TextButton(onClick = libraryViewModel::clearDeleteError) { Text(stringResource(R.string.ok_button)) } })
     if (openedId != null) {
+        LaunchedEffect(openedId) { snackbar.currentSnackbarData?.dismiss() }
         LibraryViewer(memes, openedId!!, libraryViewModel, onBack = { openedId = null })
         return
     }
@@ -254,7 +255,10 @@ private fun MainTabsScreen(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { acceptUris(it) }
     val summaryText = summary?.asText()
     LaunchedEffect(summaryText) {
-        if (summaryText != null) { snackbar.showSnackbar(summaryText); onSummaryShown() }
+        if (summaryText != null) {
+            onSummaryShown()
+            scope.launch { snackbar.showSnackbar(summaryText) }
+        }
     }
 
     Scaffold(

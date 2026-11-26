@@ -35,6 +35,7 @@ import ru.landilf.memeorganizer.R
 @Composable
 fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
     val status by viewModel.status.collectAsStateWithLifecycle()
+    val reindexedCount by viewModel.reindexedCount.collectAsStateWithLifecycle()
     var includeMedia by rememberSaveable { mutableStateOf(true) }
     var clearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(if (includeMedia) "application/zip" else "application/gzip")) { uri ->
@@ -74,23 +75,41 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                     viewModel.clearStatus()
                     filePicker.launch(if (includeMedia) "meme-organizer-full-debug.zip" else "meme-organizer-events.jsonl.gz")
                 },
-                enabled = status != DebugExportStatus.Exporting && status != DebugExportStatus.Clearing,
+                enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 16.dp)
             ) { Text(stringResource(R.string.developer_export_logs)) }
             OutlinedButton(
                 onClick = { clearConfirmationVisible = true },
-                enabled = status != DebugExportStatus.Exporting && status != DebugExportStatus.Clearing,
+                enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_clear_logs)) }
+            OutlinedButton(
+                onClick = viewModel::reindexAll,
+                enabled = !status.isBusy(),
+                modifier = Modifier.padding(top = 12.dp)
+            ) { Text(stringResource(R.string.developer_reindex_all)) }
             when (status) {
                 DebugExportStatus.Exporting -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 16.dp))
                 DebugExportStatus.Clearing -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 16.dp))
+                DebugExportStatus.Reindexing -> {
+                    Text(stringResource(R.string.developer_reindexing), Modifier.padding(top = 16.dp))
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
                 DebugExportStatus.ExportSuccess -> Text(stringResource(R.string.developer_export_success), Modifier.padding(top = 16.dp))
                 DebugExportStatus.ExportError -> Text(stringResource(R.string.developer_export_error), Modifier.padding(top = 16.dp))
                 DebugExportStatus.ClearSuccess -> Text(stringResource(R.string.developer_clear_logs_success), Modifier.padding(top = 16.dp))
                 DebugExportStatus.ClearError -> Text(stringResource(R.string.developer_clear_logs_error), Modifier.padding(top = 16.dp))
+                DebugExportStatus.ReindexSuccess -> Text(stringResource(R.string.developer_reindex_success, reindexedCount), Modifier.padding(top = 16.dp))
+                DebugExportStatus.ReindexModelUnavailable -> Text(stringResource(R.string.developer_reindex_model_unavailable), Modifier.padding(top = 16.dp))
+                DebugExportStatus.ReindexError -> Text(stringResource(R.string.developer_reindex_error), Modifier.padding(top = 16.dp))
                 DebugExportStatus.Idle -> Unit
             }
         }
     }
 }
+
+private fun DebugExportStatus.isBusy(): Boolean = this in setOf(
+    DebugExportStatus.Exporting,
+    DebugExportStatus.Clearing,
+    DebugExportStatus.Reindexing
+)
