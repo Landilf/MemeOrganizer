@@ -26,6 +26,10 @@ interface MemeDao {
     suspend fun getAll(): List<MemeEntity>
     @Query("UPDATE memes SET description = :description WHERE id = :id")
     suspend fun updateDescription(id: Long, description: String): Int
+
+    @Query("UPDATE memes SET isFavorite = :isFavorite WHERE id = :id")
+    suspend fun updateFavorite(id: Long, isFavorite: Boolean): Int
+
     @Query("DELETE FROM memes WHERE id = :id")
     suspend fun deleteById(id: Long): Int
 }

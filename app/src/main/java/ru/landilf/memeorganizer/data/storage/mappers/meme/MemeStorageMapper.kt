@@ -14,6 +14,7 @@ class MemeStorageMapper @Inject constructor() {
         mimeType = entity.mimeType,
         addedAt = Instant.ofEpochMilli(entity.addedAtMillis),
         contentHash = entity.contentHash,
-        storedFileName = entity.storedFileName
+        storedFileName = entity.storedFileName,
+        isFavorite = entity.isFavorite
     )
 }

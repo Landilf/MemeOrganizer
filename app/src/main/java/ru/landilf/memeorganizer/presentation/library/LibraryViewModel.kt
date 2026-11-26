@@ -10,8 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.usecase.meme.ObserveMemesUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
+import ru.landilf.memeorganizer.domain.usecase.meme.SetMemeFavoriteUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumsUseCase
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
@@ -19,6 +23,8 @@ import ru.landilf.memeorganizer.core.logging.LightLogStore
 import org.json.JSONObject
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import javax.inject.Inject
+
+enum class AlbumCreationError { EmptyName, Duplicate, Failed }
 
 data class EditState(
     val memeId: Long,
@@ -33,19 +39,26 @@ data class EditState(
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     observeMemes: ObserveMemesUseCase,
+    observeAlbums: ObserveAlbumsUseCase,
     private val detailsRepository: MemeDetailsRepository,
     private val saveDetails: SaveMemeDetailsUseCase,
+    private val setMemeFavorite: SetMemeFavoriteUseCase,
+    private val createNewAlbum: CreateAlbumUseCase,
     private val searchRepository: MemeSearchRepository,
     private val lightLog: LightLogStore
 ) : ViewModel() {
     val memes =
         observeMemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val albums =
+        observeAlbums().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val tags = detailsRepository.observeTags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     private val _edit = MutableStateFlow<EditState?>(null)
     val edit = _edit.asStateFlow()
     private val _deleteError = MutableStateFlow(false)
     val deleteError = _deleteError.asStateFlow()
+    private val _albumCreationError = MutableStateFlow<AlbumCreationError?>(null)
+    val albumCreationError = _albumCreationError.asStateFlow()
 
     fun openEditor(id: Long) {
         _edit.value = EditState(id)
@@ -123,12 +136,59 @@ class LibraryViewModel @Inject constructor(
         _deleteError.value = false
     }
 
+    fun setFavorite(meme: Meme, isFavorite: Boolean, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                setMemeFavorite(meme.id, isFavorite)
+                onSuccess()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                AppLogger.app { "favorite.update.failed type=${error.javaClass.simpleName}" }
+            }
+        }
+    }
+
+    fun createAlbum(name: String, onCreated: () -> Unit) {
+        _albumCreationError.value = null
+        viewModelScope.launch {
+            try {
+                if (createNewAlbum(name)) onCreated() else _albumCreationError.value = AlbumCreationError.Duplicate
+            } catch (e: IllegalArgumentException) {
+                _albumCreationError.value = AlbumCreationError.EmptyName
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                AppLogger.app { "album.create.failed type=${error.javaClass.simpleName}" }
+                _albumCreationError.value = AlbumCreationError.Failed
+            }
+        }
+    }
+
+    fun clearAlbumCreationError() {
+        _albumCreationError.value = null
+    }
+
     fun recordSearchCopy(searchId: String, meme: Meme, rank: Int, impressionAtMs: Long) {
+        recordSearchAction(searchId, meme, rank, impressionAtMs, "copy")
+    }
+
+    fun recordSearchFavorite(searchId: String, meme: Meme, rank: Int, impressionAtMs: Long) {
+        recordSearchAction(searchId, meme, rank, impressionAtMs, "favorite")
+    }
+
+    private fun recordSearchAction(
+        searchId: String,
+        meme: Meme,
+        rank: Int,
+        impressionAtMs: Long,
+        actionType: String
+    ) {
         viewModelScope.launch {
             lightLog.record(
                 "search_action", JSONObject()
                     .put("search_id", searchId)
-                    .put("action_type", "copy")
+                    .put("action_type", actionType)
                     .put("file_hash", meme.contentHash)
                     .put("rank", rank)
                     .put("time_since_impression_ms", System.currentTimeMillis() - impressionAtMs)

@@ -9,5 +9,6 @@ data class Meme(
     val mimeType: String,
     val addedAt: Instant,
     val contentHash: String,
-    val storedFileName: String
+    val storedFileName: String,
+    val isFavorite: Boolean = false
 )

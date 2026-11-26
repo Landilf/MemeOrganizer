@@ -10,6 +10,8 @@ import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.data.storage.repository.MemeDetailsRepositoryImpl
 import ru.landilf.memeorganizer.data.storage.repository.MemeSearchRepositoryImpl
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
+import ru.landilf.memeorganizer.data.storage.repository.AlbumRepositoryImpl
+import ru.landilf.memeorganizer.domain.repository.AlbumRepository
 import javax.inject.Singleton
 
 @Module
@@ -26,4 +28,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindMemeSearchRepository(implementation: MemeSearchRepositoryImpl): MemeSearchRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAlbumRepository(implementation: AlbumRepositoryImpl): AlbumRepository
 }

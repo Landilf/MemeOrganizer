@@ -66,6 +66,15 @@ class MemeDetailsRepositoryImplTest {
     }
 
     @Test
+    fun updatesFavoriteState() = runBlocking {
+        repository.setFavorite(id, true)
+        assertTrue(requireNotNull(database.memeDao().getById(id)).isFavorite)
+
+        repository.setFavorite(id, false)
+        assertFalse(requireNotNull(database.memeDao().getById(id)).isFavorite)
+    }
+
+    @Test
     fun deletingMemeRemovesCopyAndLinksButKeepsTags() = runBlocking {
         repository.save(id, MemeDetails("", listOf("Кот")))
         repository.delete(setOf(id))

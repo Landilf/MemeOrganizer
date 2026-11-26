@@ -78,7 +78,9 @@ class DatabaseMigrationsTest {
                     DatabaseMigrations.MIGRATION_1_2,
                     DatabaseMigrations.MIGRATION_2_3,
                     DatabaseMigrations.MIGRATION_3_4,
-                    DatabaseMigrations.MIGRATION_4_5
+                    DatabaseMigrations.MIGRATION_4_5,
+                    DatabaseMigrations.MIGRATION_5_6,
+                    DatabaseMigrations.MIGRATION_6_7
                 )
                 .build()
             try {
@@ -188,6 +190,38 @@ class DatabaseMigrationsTest {
                 database.query("SELECT description FROM memes WHERE id = 9").use { cursor ->
                     assertTrue(cursor.moveToFirst())
                     assertEquals("кот", cursor.getString(0))
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion5AndKeepsFavoriteDisabled() {
+        helper.createDatabase(databaseName, 5).apply {
+            execSQL(
+                "INSERT INTO memes (id, fileName, mediaType, mimeType, addedAtMillis, contentHash, storedFileName, description) VALUES (10, 'cat.png', 'Image', 'image/png', 123, 'hash', 'stored', 'кот')"
+            )
+            close()
+        }
+        helper.runMigrationsAndValidate(databaseName, 6, true, DatabaseMigrations.MIGRATION_5_6)
+            .use { database ->
+                database.query("SELECT isFavorite FROM memes WHERE id = 10").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion6AndCreatesAlbumStorage() {
+        helper.createDatabase(databaseName, 6).close()
+        helper.runMigrationsAndValidate(databaseName, 7, true, DatabaseMigrations.MIGRATION_6_7)
+            .use { database ->
+                database.execSQL(
+                    "INSERT INTO albums (name, normalizedName, createdAtMillis) VALUES ('Коты', 'коты', 123)"
+                )
+                database.query("SELECT name FROM albums").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("Коты", cursor.getString(0))
                 }
             }
     }

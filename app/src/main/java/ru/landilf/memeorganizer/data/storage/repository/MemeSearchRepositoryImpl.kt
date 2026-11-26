@@ -191,6 +191,13 @@ class MemeSearchRepositoryImpl @Inject constructor(
                                         requireNotNull(normalizedBm25ByIndex[index])
                                     ).put("final", requireNotNull(finalScores[index]))
                                 )
+                                .put(
+                                    "relevance",
+                                    relevanceDecisionJson(
+                                        rawCosine = denseScores[index],
+                                        rawBm25 = bm25Scores[index]
+                                    )
+                                )
                         )
                     }
                 })
@@ -331,6 +338,14 @@ class MemeSearchRepositoryImpl @Inject constructor(
     private fun relevanceFilterJson() = JSONObject()
         .put("raw_cosine_gte", COSINE_THRESHOLD)
         .put("raw_bm25_gte", BM25_THRESHOLD)
+
+    private fun relevanceDecisionJson(rawCosine: Float, rawBm25: Float) = JSONObject()
+        .put("raw_cosine_gte", COSINE_THRESHOLD)
+        .put("raw_bm25_gte", BM25_THRESHOLD)
+        .put(
+            "passed_relevance_filter",
+            rawCosine >= COSINE_THRESHOLD || rawBm25 >= BM25_THRESHOLD
+        )
 
     private suspend fun recordIndexingEvent(
         memeId: Long,

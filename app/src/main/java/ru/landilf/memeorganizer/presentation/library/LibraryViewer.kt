@@ -14,6 +14,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,7 +39,8 @@ fun LibraryViewer(
     initialId: Long,
     viewModel: LibraryViewModel,
     onBack: () -> Unit,
-    onCopy: (Meme) -> Unit = {}
+    onCopy: (Meme) -> Unit = {},
+    onFavorite: (Meme, Boolean) -> Unit = { _, _ -> }
 ) {
     val edit by viewModel.edit.collectAsStateWithLifecycle()
     val suggestions by viewModel.tags.collectAsStateWithLifecycle()
@@ -153,6 +156,29 @@ fun LibraryViewer(
                             Icon(
                                 Icons.Default.ContentCopy,
                                 stringResource(R.string.library_copy)
+                            )
+                        }
+                        IconButton(onClick = {
+                            memes.getOrNull(pager.currentPage)?.let { meme ->
+                                val isFavorite = !meme.isFavorite
+                                viewModel.setFavorite(meme, isFavorite) {
+                                    onFavorite(meme, isFavorite)
+                                }
+                            }
+                        }) {
+                            Icon(
+                                if (memes.getOrNull(pager.currentPage)?.isFavorite == true) {
+                                    Icons.Default.Favorite
+                                } else {
+                                    Icons.Default.FavoriteBorder
+                                },
+                                stringResource(
+                                    if (memes.getOrNull(pager.currentPage)?.isFavorite == true) {
+                                        R.string.library_remove_favorite
+                                    } else {
+                                        R.string.library_favorite
+                                    }
+                                )
                             )
                         }
                         IconButton(onClick = {

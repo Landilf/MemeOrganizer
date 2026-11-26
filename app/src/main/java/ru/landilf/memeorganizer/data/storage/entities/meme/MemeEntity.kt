@@ -13,5 +13,6 @@ data class MemeEntity(
     val addedAtMillis: Long,
     val contentHash: String,
     val storedFileName: String,
-    @androidx.room.ColumnInfo(defaultValue = "''") val description: String = ""
+    @androidx.room.ColumnInfo(defaultValue = "''") val description: String = "",
+    @androidx.room.ColumnInfo(defaultValue = "0") val isFavorite: Boolean = false
 )

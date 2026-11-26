@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.data.storage.dao.TextEmbeddingDao
 import ru.landilf.memeorganizer.data.storage.dao.LightLogDao
+import ru.landilf.memeorganizer.data.storage.dao.AlbumDao
 import ru.landilf.memeorganizer.data.storage.database.AppDatabase
 import ru.landilf.memeorganizer.data.storage.database.DatabaseMigrations
 import javax.inject.Singleton
@@ -25,7 +26,9 @@ object DatabaseModule {
                 DatabaseMigrations.MIGRATION_1_2,
                 DatabaseMigrations.MIGRATION_2_3,
                 DatabaseMigrations.MIGRATION_3_4,
-                DatabaseMigrations.MIGRATION_4_5
+                DatabaseMigrations.MIGRATION_4_5,
+                DatabaseMigrations.MIGRATION_5_6,
+                DatabaseMigrations.MIGRATION_6_7
             )
             .build()
 
@@ -38,4 +41,7 @@ object DatabaseModule {
 
     @Provides
     fun provideLightLogDao(database: AppDatabase): LightLogDao = database.lightLogDao()
+
+    @Provides
+    fun provideAlbumDao(database: AppDatabase): AlbumDao = database.albumDao()
 }
