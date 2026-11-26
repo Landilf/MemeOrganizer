@@ -1,6 +1,8 @@
 package ru.landilf.memeorganizer.presentation
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
@@ -68,6 +71,7 @@ import ru.landilf.memeorganizer.presentation.settings.ModelUpdateNotice
 import ru.landilf.memeorganizer.presentation.settings.ModelUpdateViewModel
 import ru.landilf.memeorganizer.presentation.settings.DeveloperScreen
 import ru.landilf.memeorganizer.presentation.settings.DeveloperViewModel
+import ru.landilf.memeorganizer.presentation.settings.AppSettingsViewModel
 import ru.landilf.memeorganizer.presentation.search.SearchScreen
 import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 import ru.landilf.memeorganizer.domain.model.album.Album
@@ -77,6 +81,8 @@ import ru.landilf.memeorganizer.presentation.library.AlbumNameDialog
 import ru.landilf.memeorganizer.presentation.library.AlbumPickerDialog
 import ru.landilf.memeorganizer.presentation.library.DeleteMemesConfirmationDialog
 import ru.landilf.memeorganizer.presentation.album.AlbumContentsScreen
+import ru.landilf.memeorganizer.domain.model.settings.AppSettings
+import ru.landilf.memeorganizer.domain.model.settings.LibrarySort
 
 private enum class MainTab(val title: Int, val icon: ImageVector, val message: Int) {
     Albums(R.string.navigation_albums, Icons.Default.Collections, R.string.albums_empty),
@@ -91,6 +97,29 @@ private enum class SystemAlbum(@StringRes val title: Int) {
 
 private const val SEARCH_CANDIDATE_IDS_KEY = "search_candidate_ids"
 private const val RECENT_ALBUM_PERIOD_MILLIS = 30L * 24 * 60 * 60 * 1_000
+
+private fun List<Meme>.sortedByPreference(sort: LibrarySort): List<Meme> = when (sort) {
+    LibrarySort.AddedAt -> sortedWith(
+        compareByDescending<Meme> { it.addedAt }.thenByDescending { it.id }
+    )
+    LibrarySort.UsageCount -> sortedWith(
+        compareByDescending<Meme> { it.usageCount }
+            .thenByDescending { it.lastUsedAt }
+            .thenByDescending { it.addedAt }
+    )
+    LibrarySort.LastUsed -> sortedWith(
+        compareByDescending<Meme> { it.lastUsedAt }
+            .thenByDescending { it.usageCount }
+            .thenByDescending { it.addedAt }
+    )
+}
+
+private val LibrarySort.label: Int
+    get() = when (this) {
+        LibrarySort.AddedAt -> R.string.library_sort_added_at
+        LibrarySort.UsageCount -> R.string.library_sort_usage_count
+        LibrarySort.LastUsed -> R.string.library_sort_last_used
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,8 +138,10 @@ fun AppRoot() {
         NavHost(navController = navController, startDestination = "library") {
             composable("library") {
                 val libraryViewModel: LibraryViewModel = hiltViewModel()
+                val appSettingsViewModel: AppSettingsViewModel = hiltViewModel()
                 val memes by libraryViewModel.memes.collectAsStateWithLifecycle()
                 val albums by libraryViewModel.albums.collectAsStateWithLifecycle()
+                val appSettings by appSettingsViewModel.settings.collectAsStateWithLifecycle()
                 MainTabsScreen(
                     onSettingsClick = { navController.navigate("settings") },
                     onSearchClick = { navController.navigate("search") },
@@ -121,7 +152,9 @@ fun AppRoot() {
                     },
                     memes = memes,
                     albums = albums,
+                    appSettings = appSettings,
                     libraryViewModel = libraryViewModel,
+                    onLibrarySortSelected = appSettingsViewModel::setLibrarySort,
                     summary = importState.summary,
                     onSummaryShown = importViewModel::clearSummary
                 )
@@ -207,7 +240,9 @@ fun AppRoot() {
             }
             composable("settings") {
                 val modelViewModel: ModelSettingsViewModel = hiltViewModel()
+                val appSettingsViewModel: AppSettingsViewModel = hiltViewModel()
                 val modelStatus by modelViewModel.status.collectAsStateWithLifecycle()
+                val appSettings by appSettingsViewModel.settings.collectAsStateWithLifecycle()
                 val modelPicker =
                     rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                         if (uri != null) modelViewModel.install(uri)
@@ -222,7 +257,10 @@ fun AppRoot() {
                         }
                     })
                 }) { padding ->
-                    Column(modifier = Modifier.padding(padding).padding(24.dp)) {
+                    Column(
+                        modifier = Modifier.padding(padding).padding(24.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         Text(
                             stringResource(R.string.settings_text_model),
                             style = MaterialTheme.typography.titleMedium
@@ -272,6 +310,37 @@ fun AppRoot() {
                         }
                         if (modelUpdateState.checking) Text(stringResource(R.string.settings_model_update_checking))
                         if (updateNotice != null) Text(stringResource(updateNotice))
+                        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                        Text(
+                            stringResource(R.string.settings_system_albums),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                stringResource(R.string.albums_recently_added),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Switch(
+                                checked = appSettings.showRecentlyAddedAlbum,
+                                onCheckedChange = appSettingsViewModel::setRecentlyAddedAlbumVisible
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                stringResource(R.string.albums_recently_used),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Switch(
+                                checked = appSettings.showRecentlyUsedAlbum,
+                                onCheckedChange = appSettingsViewModel::setRecentlyUsedAlbumVisible
+                            )
+                        }
                         if (BuildConfig.DEBUG) {
                             TextButton(onClick = { navController.navigate("developer") }) {
                                 Text(stringResource(R.string.settings_developer))
@@ -311,7 +380,9 @@ private fun MainTabsScreen(
     onFilesSelected: (List<String>) -> Unit,
     memes: List<Meme>,
     albums: List<Album>,
+    appSettings: AppSettings,
     libraryViewModel: LibraryViewModel,
+    onLibrarySortSelected: (LibrarySort) -> Unit,
     summary: ImportSummary?,
     onSummaryShown: () -> Unit
 ) {
@@ -322,6 +393,7 @@ private fun MainTabsScreen(
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var sortMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var openedId by rememberSaveable { mutableStateOf<Long?>(null) }
     var openedFromFavorites by rememberSaveable { mutableStateOf(false) }
     var openedFromAlbum by rememberSaveable { mutableStateOf(false) }
@@ -341,6 +413,15 @@ private fun MainTabsScreen(
     val albumRenameError by libraryViewModel.albumRenameError.collectAsStateWithLifecycle()
     val albumMemes by libraryViewModel.albumMemes.collectAsStateWithLifecycle()
     val openedAlbum = albums.firstOrNull { it.id == openedAlbumId }
+    val sortedMemes = remember(memes, appSettings.librarySort) {
+        memes.sortedByPreference(appSettings.librarySort)
+    }
+    val visibleSystemAlbums = SystemAlbum.entries.filter { album ->
+        when (album) {
+            SystemAlbum.RecentlyAdded -> appSettings.showRecentlyAddedAlbum
+            SystemAlbum.RecentlyUsed -> appSettings.showRecentlyUsedAlbum
+        }
+    }
     val recentStartMillis = System.currentTimeMillis() - RECENT_ALBUM_PERIOD_MILLIS
     val systemAlbumMemes = when (openedSystemAlbum) {
         SystemAlbum.RecentlyAdded -> memes.filter { it.addedAt.toEpochMilli() >= recentStartMillis }
@@ -368,8 +449,8 @@ private fun MainTabsScreen(
         val viewerMemes = when {
             openedFromAlbum -> albumMemes
             openedSystemAlbum != null -> systemAlbumMemes
-            openedFromFavorites -> memes.filter { it.isFavorite }
-            else -> memes
+            openedFromFavorites -> sortedMemes.filter { it.isFavorite }
+            else -> sortedMemes
         }
         LibraryViewer(
             memes = viewerMemes,
@@ -558,8 +639,8 @@ private fun MainTabsScreen(
         }
     val summaryText = summary?.asText()
     val currentMemes = when (tabs[pagerState.currentPage]) {
-        MainTab.Home -> memes
-        MainTab.Favorites -> memes.filter { it.isFavorite }
+        MainTab.Home -> sortedMemes
+        MainTab.Favorites -> sortedMemes.filter { it.isFavorite }
         MainTab.Albums -> emptyList()
     }
     LaunchedEffect(summaryText) {
@@ -580,6 +661,30 @@ private fun MainTabsScreen(
                     ), Modifier.padding(end = 20.dp)
                 )
                 else {
+                    if (tabs[pagerState.currentPage] != MainTab.Albums) {
+                        Box {
+                            IconButton(onClick = { sortMenuExpanded = true }) {
+                                Icon(
+                                    Icons.Default.Sort,
+                                    contentDescription = stringResource(R.string.library_sort)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = sortMenuExpanded,
+                                onDismissRequest = { sortMenuExpanded = false }
+                            ) {
+                                LibrarySort.entries.forEach { sort ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(sort.label)) },
+                                        onClick = {
+                                            sortMenuExpanded = false
+                                            onLibrarySortSelected(sort)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                     IconButton(onClick = onSearchClick) {
                         Icon(
                             Icons.Default.Search,
@@ -671,8 +776,8 @@ private fun MainTabsScreen(
             modifier = Modifier.fillMaxSize().padding(padding)
         ) { page ->
             val pageMemes = when (tabs[page]) {
-                MainTab.Home -> memes
-                MainTab.Favorites -> memes.filter { it.isFavorite }
+                MainTab.Home -> sortedMemes
+                MainTab.Favorites -> sortedMemes.filter { it.isFavorite }
                 MainTab.Albums -> emptyList()
             }
             if (tabs[page] == MainTab.Albums) {
@@ -681,7 +786,7 @@ private fun MainTabsScreen(
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    lazyItems(SystemAlbum.entries, key = { it.name }) { album ->
+                    lazyItems(visibleSystemAlbums, key = { it.name }) { album ->
                         Card(
                             Modifier.fillMaxWidth().combinedClickable(
                                 onClick = {

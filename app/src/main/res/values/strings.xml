@@ -17,12 +17,17 @@
     <string name="settings_empty">Настройки появятся позже</string>
     <string name="settings_theme_components">Посмотреть элементы темы</string>
     <string name="settings_developer">Для разработчиков</string>
+    <string name="settings_system_albums">Системные альбомы</string>
 
     <string name="library_add">Добавить мемы</string>
     <string name="library_import_gallery">Галерея</string>
     <string name="library_import_files">Файлы</string>
     <string name="library_add_hint">Нажмите +, чтобы добавить файлы</string>
     <string name="library_empty">Здесь будут ваши мемы</string>
+    <string name="library_sort">Сортировка</string>
+    <string name="library_sort_added_at">По дате добавления</string>
+    <string name="library_sort_usage_count">По частоте использования</string>
+    <string name="library_sort_last_used">По последнему использованию</string>
 
     <string name="albums_empty">Здесь будут ваши альбомы</string>
     <string name="albums_create">Создать альбом</string>
