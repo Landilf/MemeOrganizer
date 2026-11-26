@@ -11,6 +11,7 @@ import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.data.storage.dao.TextEmbeddingDao
 import ru.landilf.memeorganizer.data.storage.dao.LightLogDao
 import ru.landilf.memeorganizer.data.storage.dao.AlbumDao
+import ru.landilf.memeorganizer.data.storage.dao.TagDao
 import ru.landilf.memeorganizer.data.storage.database.AppDatabase
 import ru.landilf.memeorganizer.data.storage.database.DatabaseMigrations
 import javax.inject.Singleton
@@ -46,4 +47,7 @@ object DatabaseModule {
 
     @Provides
     fun provideAlbumDao(database: AppDatabase): AlbumDao = database.albumDao()
+
+    @Provides
+    fun provideTagDao(database: AppDatabase): TagDao = database.tagDao()
 }

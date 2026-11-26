@@ -10,6 +10,8 @@ import ru.landilf.memeorganizer.data.storage.entities.meme.MemeTagEntity
 
 data class TagUsage(val id: Long, val name: String, val normalizedName: String, val usageCount: Int)
 
+data class MemeTagSnapshot(val memeId: Long, val name: String)
+
 @Dao
 interface TagDao {
     @Query("SELECT tags.id, tags.name, tags.normalizedName, COUNT(meme_tags.memeId) AS usageCount FROM tags LEFT JOIN meme_tags ON tags.id = meme_tags.tagId GROUP BY tags.id")
@@ -26,4 +28,17 @@ interface TagDao {
     suspend fun insertLink(link: MemeTagEntity)
     @Query("DELETE FROM meme_tags WHERE memeId = :memeId")
     suspend fun clearLinks(memeId: Long)
+
+    @Query(
+        """
+        SELECT meme_tags.memeId AS memeId, tags.name AS name
+        FROM meme_tags
+        INNER JOIN tags ON tags.id = meme_tags.tagId
+        ORDER BY meme_tags.memeId, tags.name
+        """
+    )
+    suspend fun getAllMemeTags(): List<MemeTagSnapshot>
+
+    @Query("DELETE FROM tags")
+    suspend fun deleteAll()
 }

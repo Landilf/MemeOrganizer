@@ -77,6 +77,10 @@ import ru.landilf.memeorganizer.presentation.settings.ModelUpdateViewModel
 import ru.landilf.memeorganizer.presentation.settings.DeveloperScreen
 import ru.landilf.memeorganizer.presentation.settings.DeveloperViewModel
 import ru.landilf.memeorganizer.presentation.settings.AppSettingsViewModel
+import ru.landilf.memeorganizer.presentation.settings.LibraryBackupSection
+import ru.landilf.memeorganizer.presentation.settings.LibraryBackupViewModel
+import ru.landilf.memeorganizer.presentation.settings.AutomaticBackupSection
+import ru.landilf.memeorganizer.presentation.settings.AutomaticBackupViewModel
 import ru.landilf.memeorganizer.presentation.search.SearchScreen
 import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 import ru.landilf.memeorganizer.domain.model.album.Album
@@ -283,6 +287,8 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
             composable("settings") {
                 val modelViewModel: ModelSettingsViewModel = hiltViewModel()
                 val appSettingsViewModel: AppSettingsViewModel = hiltViewModel()
+                val libraryBackupViewModel: LibraryBackupViewModel = hiltViewModel()
+                val automaticBackupViewModel: AutomaticBackupViewModel = hiltViewModel()
                 val modelStatus by modelViewModel.status.collectAsStateWithLifecycle()
                 val appSettings by appSettingsViewModel.settings.collectAsStateWithLifecycle()
                 val modelPicker =
@@ -352,6 +358,10 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                         }
                         if (modelUpdateState.checking) Text(stringResource(R.string.settings_model_update_checking))
                         if (updateNotice != null) Text(stringResource(updateNotice))
+                        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                        LibraryBackupSection(libraryBackupViewModel)
+                        HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                        AutomaticBackupSection(automaticBackupViewModel)
                         HorizontalDivider(Modifier.padding(vertical = 16.dp))
                         Text(
                             stringResource(R.string.settings_system_albums),

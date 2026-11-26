@@ -9,10 +9,18 @@ import ru.landilf.memeorganizer.data.storage.entities.album.AlbumEntity
 import ru.landilf.memeorganizer.data.storage.entities.album.AlbumMemeEntity
 import ru.landilf.memeorganizer.data.storage.entities.meme.MemeEntity
 
+data class AlbumMemeSnapshot(val albumId: Long, val memeId: Long)
+
 @Dao
 interface AlbumDao {
     @Query("SELECT * FROM albums ORDER BY createdAtMillis DESC, id DESC")
     fun observeAlbums(): Flow<List<AlbumEntity>>
+
+    @Query("SELECT * FROM albums ORDER BY id")
+    suspend fun getAll(): List<AlbumEntity>
+
+    @Query("SELECT albumId, memeId FROM album_memes ORDER BY albumId, memeId")
+    suspend fun getAllMemeLinks(): List<AlbumMemeSnapshot>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(album: AlbumEntity): Long
@@ -27,6 +35,9 @@ interface AlbumDao {
 
     @Query("DELETE FROM albums WHERE id = :albumId")
     suspend fun delete(albumId: Long)
+
+    @Query("DELETE FROM albums")
+    suspend fun deleteAll()
 
     @Query("DELETE FROM album_memes WHERE albumId = :albumId AND memeId IN (:memeIds)")
     suspend fun deleteMemeLinks(albumId: Long, memeIds: Set<Long>)

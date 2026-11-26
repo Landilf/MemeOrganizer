@@ -18,6 +18,9 @@ interface MemeDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(meme: MemeEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(memes: List<MemeEntity>): List<Long>
+
     @Query("SELECT * FROM memes WHERE id = :id")
     suspend fun getById(id: Long): MemeEntity?
     @Query("SELECT * FROM memes WHERE id IN (:ids)")
@@ -37,4 +40,7 @@ interface MemeDao {
 
     @Query("DELETE FROM memes WHERE id = :id")
     suspend fun deleteById(id: Long): Int
+
+    @Query("DELETE FROM memes")
+    suspend fun deleteAll()
 }

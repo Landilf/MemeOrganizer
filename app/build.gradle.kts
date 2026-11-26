@@ -90,6 +90,8 @@ dependencies {
     implementation(libs.commons.compress)
     implementation(libs.djl.tokenizers)
     runtimeOnly(libs.djl.tokenizer.native)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.documentfile)
 
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
