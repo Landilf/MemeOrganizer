@@ -32,7 +32,11 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
@@ -56,6 +60,7 @@ import androidx.navigation.navArgument
 import ru.landilf.memeorganizer.BuildConfig
 import ru.landilf.memeorganizer.presentation.theme.MemeOrganizerTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
 import java.io.File
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
 import ru.landilf.memeorganizer.presentation.importing.ImportSummary
@@ -76,6 +81,7 @@ import ru.landilf.memeorganizer.presentation.search.SearchScreen
 import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.domain.model.meme.Meme
+import ru.landilf.memeorganizer.domain.model.meme.MemeMediaType
 import ru.landilf.memeorganizer.presentation.library.AlbumNameError
 import ru.landilf.memeorganizer.presentation.library.AlbumNameDialog
 import ru.landilf.memeorganizer.presentation.library.AlbumPickerDialog
@@ -83,6 +89,7 @@ import ru.landilf.memeorganizer.presentation.library.DeleteMemesConfirmationDial
 import ru.landilf.memeorganizer.presentation.album.AlbumContentsScreen
 import ru.landilf.memeorganizer.domain.model.settings.AppSettings
 import ru.landilf.memeorganizer.domain.model.settings.LibrarySort
+import ru.landilf.memeorganizer.domain.model.settings.SortDirection
 
 private enum class MainTab(val title: Int, val icon: ImageVector, val message: Int) {
     Albums(R.string.navigation_albums, Icons.Default.Collections, R.string.albums_empty),
@@ -98,37 +105,60 @@ private enum class SystemAlbum(@StringRes val title: Int) {
 private const val SEARCH_CANDIDATE_IDS_KEY = "search_candidate_ids"
 private const val RECENT_ALBUM_PERIOD_MILLIS = 30L * 24 * 60 * 60 * 1_000
 
-private fun List<Meme>.sortedByPreference(sort: LibrarySort): List<Meme> = when (sort) {
-    LibrarySort.AddedAt -> sortedWith(
-        compareByDescending<Meme> { it.addedAt }.thenByDescending { it.id }
-    )
-    LibrarySort.UsageCount -> sortedWith(
-        compareByDescending<Meme> { it.usageCount }
-            .thenByDescending { it.lastUsedAt }
-            .thenByDescending { it.addedAt }
-    )
-    LibrarySort.LastUsed -> sortedWith(
-        compareByDescending<Meme> { it.lastUsedAt }
-            .thenByDescending { it.usageCount }
-            .thenByDescending { it.addedAt }
-    )
+private fun List<Meme>.sortedByPreference(
+    sort: LibrarySort,
+    direction: SortDirection?
+): List<Meme> {
+    val defaultOrder = when (sort) {
+        LibrarySort.AddedAt -> sortedWith(
+            compareByDescending<Meme> { it.addedAt }.thenByDescending { it.id }
+        )
+        LibrarySort.UsageCount -> sortedWith(
+            compareByDescending<Meme> { it.usageCount }
+                .thenByDescending { it.lastUsedAt }
+                .thenByDescending { it.addedAt }
+        )
+        LibrarySort.MediaType -> sortedWith(
+            compareBy<Meme> { it.mediaType.sortOrder }.thenByDescending { it.addedAt }
+        )
+    }
+    return if (direction == SortDirection.Ascending) defaultOrder.reversed() else defaultOrder
 }
+
+private val MemeMediaType.sortOrder: Int
+    get() = when (this) {
+        MemeMediaType.Image -> 0
+        MemeMediaType.Gif -> 1
+        MemeMediaType.Video -> 2
+    }
 
 private val LibrarySort.label: Int
     get() = when (this) {
         LibrarySort.AddedAt -> R.string.library_sort_added_at
         LibrarySort.UsageCount -> R.string.library_sort_usage_count
-        LibrarySort.LastUsed -> R.string.library_sort_last_used
+        LibrarySort.MediaType -> R.string.library_sort_media_type
     }
+
+private fun SortDirection?.next(): SortDirection = when (this) {
+    null, SortDirection.Ascending -> SortDirection.Descending
+    SortDirection.Descending -> SortDirection.Ascending
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppRoot() {
+fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emptyFlow()) {
     val navController = rememberNavController()
     val importViewModel: ImportViewModel = hiltViewModel()
     val importState by importViewModel.state.collectAsStateWithLifecycle()
     val modelUpdateViewModel: ModelUpdateViewModel = hiltViewModel()
     val modelUpdateState by modelUpdateViewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(sharedMediaSources) {
+        sharedMediaSources.collect { sources ->
+            if (sources.isEmpty()) return@collect
+            importViewModel.setSources(sources)
+            navController.navigate("import") { launchSingleTop = true }
+        }
+    }
     MemeOrganizerTheme {
         ModelUpdateDialog(
             modelUpdateState,
@@ -155,6 +185,7 @@ fun AppRoot() {
                     appSettings = appSettings,
                     libraryViewModel = libraryViewModel,
                     onLibrarySortSelected = appSettingsViewModel::setLibrarySort,
+                    onLibrarySortDirectionSelected = appSettingsViewModel::setLibrarySortDirection,
                     summary = importState.summary,
                     onSummaryShown = importViewModel::clearSummary
                 )
@@ -218,6 +249,17 @@ fun AppRoot() {
                         val actionRank = searchRankByMemeId?.get(meme.id) ?: rank
                         if (searchId != null && actionRank > 0 && impressionAtMs > 0) {
                             libraryViewModel.recordSearchCopy(
+                                searchId,
+                                meme,
+                                actionRank,
+                                impressionAtMs
+                            )
+                        }
+                    },
+                    onShare = { meme ->
+                        val actionRank = searchRankByMemeId?.get(meme.id) ?: rank
+                        if (searchId != null && actionRank > 0 && impressionAtMs > 0) {
+                            libraryViewModel.recordSearchShare(
                                 searchId,
                                 meme,
                                 actionRank,
@@ -383,6 +425,7 @@ private fun MainTabsScreen(
     appSettings: AppSettings,
     libraryViewModel: LibraryViewModel,
     onLibrarySortSelected: (LibrarySort) -> Unit,
+    onLibrarySortDirectionSelected: (SortDirection) -> Unit,
     summary: ImportSummary?,
     onSummaryShown: () -> Unit
 ) {
@@ -413,8 +456,8 @@ private fun MainTabsScreen(
     val albumRenameError by libraryViewModel.albumRenameError.collectAsStateWithLifecycle()
     val albumMemes by libraryViewModel.albumMemes.collectAsStateWithLifecycle()
     val openedAlbum = albums.firstOrNull { it.id == openedAlbumId }
-    val sortedMemes = remember(memes, appSettings.librarySort) {
-        memes.sortedByPreference(appSettings.librarySort)
+    val sortedMemes = remember(memes, appSettings.librarySort, appSettings.librarySortDirection) {
+        memes.sortedByPreference(appSettings.librarySort, appSettings.librarySortDirection)
     }
     val visibleSystemAlbums = SystemAlbum.entries.filter { album ->
         when (album) {
@@ -665,7 +708,7 @@ private fun MainTabsScreen(
                         Box {
                             IconButton(onClick = { sortMenuExpanded = true }) {
                                 Icon(
-                                    Icons.Default.Sort,
+                                    Icons.Default.FilterList,
                                     contentDescription = stringResource(R.string.library_sort)
                                 )
                             }
@@ -675,10 +718,47 @@ private fun MainTabsScreen(
                             ) {
                                 LibrarySort.entries.forEach { sort ->
                                     DropdownMenuItem(
-                                        text = { Text(stringResource(sort.label)) },
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(Modifier.size(24.dp)) {
+                                                    if (sort == appSettings.librarySort) {
+                                                        Icon(
+                                                            Icons.Default.Check,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                }
+                                                Box(Modifier.size(24.dp)) {
+                                                    if (sort == appSettings.librarySort) {
+                                                        when (appSettings.librarySortDirection) {
+                                                            null -> Unit
+                                                            SortDirection.Descending -> Icon(
+                                                                Icons.Default.ArrowDownward,
+                                                                contentDescription = null
+                                                            )
+                                                            SortDirection.Ascending -> Icon(
+                                                                Icons.Default.ArrowUpward,
+                                                                contentDescription = null
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Text(stringResource(sort.label))
+                                            }
+                                        },
                                         onClick = {
                                             sortMenuExpanded = false
-                                            onLibrarySortSelected(sort)
+                                            if (sort == appSettings.librarySort) {
+                                                onLibrarySortDirectionSelected(
+                                                    appSettings.librarySortDirection.next()
+                                                )
+                                            } else {
+                                                onLibrarySortSelected(sort)
+                                                onLibrarySortDirectionSelected(SortDirection.Descending)
+                                            }
                                         }
                                     )
                                 }

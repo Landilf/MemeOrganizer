@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import ru.landilf.memeorganizer.domain.model.settings.AppSettings
 import ru.landilf.memeorganizer.domain.model.settings.LibrarySort
+import ru.landilf.memeorganizer.domain.model.settings.SortDirection
 import ru.landilf.memeorganizer.domain.repository.AppSettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +26,8 @@ class AppSettingsRepositoryImpl @Inject constructor(
             librarySort = values[LIBRARY_SORT]
                 ?.let { name -> LibrarySort.entries.firstOrNull { it.name == name } }
                 ?: LibrarySort.AddedAt,
+            librarySortDirection = values[LIBRARY_SORT_DIRECTION]
+                ?.let { name -> SortDirection.entries.firstOrNull { it.name == name } },
             showRecentlyAddedAlbum = values[SHOW_RECENTLY_ADDED] ?: true,
             showRecentlyUsedAlbum = values[SHOW_RECENTLY_USED] ?: true
         )
@@ -32,6 +35,10 @@ class AppSettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setLibrarySort(sort: LibrarySort) {
         context.appSettingsDataStore.edit { it[LIBRARY_SORT] = sort.name }
+    }
+
+    override suspend fun setLibrarySortDirection(direction: SortDirection) {
+        context.appSettingsDataStore.edit { it[LIBRARY_SORT_DIRECTION] = direction.name }
     }
 
     override suspend fun setRecentlyAddedAlbumVisible(visible: Boolean) {
@@ -44,6 +51,7 @@ class AppSettingsRepositoryImpl @Inject constructor(
 
     private companion object {
         val LIBRARY_SORT = stringPreferencesKey("library_sort")
+        val LIBRARY_SORT_DIRECTION = stringPreferencesKey("library_sort_direction")
         val SHOW_RECENTLY_ADDED = booleanPreferencesKey("show_recently_added_album")
         val SHOW_RECENTLY_USED = booleanPreferencesKey("show_recently_used_album")
     }

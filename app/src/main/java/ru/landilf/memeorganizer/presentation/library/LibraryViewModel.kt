@@ -281,6 +281,10 @@ class LibraryViewModel @Inject constructor(
         recordSearchAction(searchId, meme, rank, impressionAtMs, "copy")
     }
 
+    fun recordSearchShare(searchId: String, meme: Meme, rank: Int, impressionAtMs: Long) {
+        recordSearchAction(searchId, meme, rank, impressionAtMs, "share")
+    }
+
     fun recordSearchFavorite(searchId: String, meme: Meme, rank: Int, impressionAtMs: Long) {
         recordSearchAction(searchId, meme, rank, impressionAtMs, "favorite")
     }

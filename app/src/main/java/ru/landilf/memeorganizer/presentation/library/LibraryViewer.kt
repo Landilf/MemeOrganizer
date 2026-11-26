@@ -1,6 +1,7 @@
 package ru.landilf.memeorganizer.presentation.library
 
 import android.net.Uri
+import android.content.Intent
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.model.meme.Meme
+import ru.landilf.memeorganizer.domain.model.meme.MemeMediaType
 import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.presentation.common.FullMedia
 import java.io.File
@@ -46,6 +49,7 @@ fun LibraryViewer(
     albums: List<Album> = emptyList(),
     currentAlbumId: Long? = null,
     onCopy: (Meme) -> Unit = {},
+    onShare: (Meme) -> Unit = {},
     onFavorite: (Meme, Boolean) -> Unit = { _, _ -> }
 ) {
     val edit by viewModel.edit.collectAsStateWithLifecycle()
@@ -157,16 +161,6 @@ fun LibraryViewer(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         IconButton(onClick = {
                             memes.getOrNull(pager.currentPage)?.let { meme ->
-                                pendingDelete = meme.id
-                            }
-                        }) {
-                            Icon(
-                                Icons.Default.Delete,
-                                stringResource(R.string.library_delete)
-                            )
-                        }
-                        IconButton(onClick = {
-                            memes.getOrNull(pager.currentPage)?.let { meme ->
                                 val isFavorite = !meme.isFavorite
                                 viewModel.setFavorite(meme, isFavorite) {
                                     onFavorite(meme, isFavorite)
@@ -193,30 +187,53 @@ fun LibraryViewer(
                         }) { Icon(Icons.Default.Edit, stringResource(R.string.edit_title)) }
                         IconButton(onClick = {
                             memes.getOrNull(pager.currentPage)?.let { meme ->
-                                copyMemeToClipboard(context, meme)
+                                shareMeme(context, meme)
                                     .onSuccess {
                                         viewModel.markMemeUsed(meme.id)
-                                        Toast.makeText(
-                                            context,
-                                            R.string.library_copy_success,
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        onCopy(meme)
+                                        onShare(meme)
                                     }
                                     .onFailure { error ->
-                                        AppLogger.app { "media.copy.failed type=${error.javaClass.simpleName}" }
+                                        AppLogger.app { "media.share.failed type=${error.javaClass.simpleName}" }
                                         Toast.makeText(
                                             context,
-                                            R.string.library_copy_error,
+                                            R.string.library_share_error,
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
                             }
                         }) {
-                            Icon(
-                                Icons.Default.ContentCopy,
-                                stringResource(R.string.library_copy)
-                            )
+                            Icon(Icons.Default.Share, stringResource(R.string.library_share))
+                        }
+                        if (memes.getOrNull(pager.currentPage)?.mediaType != MemeMediaType.Video) {
+                            IconButton(onClick = {
+                                memes.getOrNull(pager.currentPage)?.let { meme ->
+                                    copyMemeToClipboard(context, meme)
+                                        .onSuccess {
+                                            viewModel.markMemeUsed(meme.id)
+                                            Toast.makeText(
+                                                context,
+                                                R.string.library_copy_success,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            onCopy(meme)
+                                        }
+                                        .onFailure { error ->
+                                            AppLogger.app {
+                                                "media.copy.failed type=${error.javaClass.simpleName}"
+                                            }
+                                            Toast.makeText(
+                                                context,
+                                                R.string.library_copy_error,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                }
+                            }) {
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    stringResource(R.string.library_copy)
+                                )
+                            }
                         }
                         Box {
                             IconButton(onClick = { secondaryMenuExpanded = true }) {
@@ -229,6 +246,14 @@ fun LibraryViewer(
                                 expanded = secondaryMenuExpanded,
                                 onDismissRequest = { secondaryMenuExpanded = false }
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.library_delete)) },
+                                    leadingIcon = { Icon(Icons.Default.Delete, null) },
+                                    onClick = {
+                                        secondaryMenuExpanded = false
+                                        pendingDelete = memes.getOrNull(pager.currentPage)?.id
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.albums_add_memes)) },
                                     leadingIcon = { Icon(Icons.Default.Collections, null) },
@@ -264,9 +289,7 @@ fun LibraryViewer(
 
 private fun copyMemeToClipboard(context: android.content.Context, meme: Meme): Result<Unit> =
     runCatching {
-        val file = File(File(context.filesDir, "memes"), meme.storedFileName)
-        check(file.isFile)
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+        val uri = memeContentUri(context, meme)
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         val clip = ClipData(
             ClipDescription(meme.fileName, arrayOf(meme.mimeType)),
@@ -274,3 +297,19 @@ private fun copyMemeToClipboard(context: android.content.Context, meme: Meme): R
         )
         clipboard.setPrimaryClip(clip)
     }
+
+private fun shareMeme(context: android.content.Context, meme: Meme): Result<Unit> = runCatching {
+    val uri = memeContentUri(context, meme)
+    val intent = Intent(Intent.ACTION_SEND)
+        .setType(meme.mimeType)
+        .putExtra(Intent.EXTRA_STREAM, uri)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        .apply { clipData = ClipData.newRawUri(meme.fileName, uri) }
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.library_share_chooser)))
+}
+
+private fun memeContentUri(context: android.content.Context, meme: Meme): Uri {
+    val file = File(File(context.filesDir, "memes"), meme.storedFileName)
+    check(file.isFile)
+    return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+}

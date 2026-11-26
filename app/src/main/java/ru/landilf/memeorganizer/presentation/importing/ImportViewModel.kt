@@ -5,12 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.domain.model.importing.ImportResult
 import ru.landilf.memeorganizer.domain.model.importing.ImportSource
+import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
+import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
+import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 import ru.landilf.memeorganizer.domain.usecase.meme.ImportMemesUseCase
+import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 import javax.inject.Inject
 
 data class ImportUiState(
@@ -19,7 +25,8 @@ data class ImportUiState(
     val importing: Boolean = false,
     val completed: Int = 0,
     val total: Int = 0,
-    val summary: ImportSummary? = null
+    val summary: ImportSummary? = null,
+    val detailsBySource: Map<String, MemeDetails> = emptyMap()
 )
 
 sealed interface ImportSummary {
@@ -30,11 +37,16 @@ sealed interface ImportSummary {
 @HiltViewModel
 class ImportViewModel @Inject constructor(
     private val importMemes: ImportMemesUseCase,
+    private val detailsRepository: MemeDetailsRepository,
+    private val saveMemeDetails: SaveMemeDetailsUseCase,
+    private val searchRepository: MemeSearchRepository,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val _state =
         MutableStateFlow(ImportUiState(sources = savedStateHandle["sources"] ?: emptyList()))
     val state = _state.asStateFlow()
+    val tags = detailsRepository.observeTags()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setSources(sources: List<String>) {
         val unique = sources.distinct()
@@ -51,7 +63,19 @@ class ImportViewModel @Inject constructor(
     fun remove(sources: Set<String>) {
         val remaining = _state.value.sources.filterNot { it in sources }
         savedStateHandle["sources"] = ArrayList(remaining)
-        _state.update { it.copy(sources = remaining, selected = emptySet()) }
+        _state.update {
+            it.copy(
+                sources = remaining,
+                selected = emptySet(),
+                detailsBySource = it.detailsBySource.filterKeys { source -> source in remaining }
+            )
+        }
+    }
+
+    fun updateDetails(source: String, details: MemeDetails) {
+        _state.update { current ->
+            current.copy(detailsBySource = current.detailsBySource + (source to details))
+        }
     }
 
     fun clearSummary() = _state.update { it.copy(summary = null) }
@@ -67,9 +91,18 @@ class ImportViewModel @Inject constructor(
             val remaining = sources.map { it.identifier }.toMutableList()
             try {
                 importMemes(sources).collect { progress ->
-                    when (progress.latestResult) {
+                    val result = progress.latestResult
+                    when (result) {
                         is ImportResult.Imported -> {
-                            imported++; remaining.remove(progress.latestSource?.identifier)
+                            imported++
+                            progress.latestSource?.identifier?.let { source ->
+                                val details = _state.value.detailsBySource[source]
+                                if (details != null && (details.description.isNotBlank() || details.tags.isNotEmpty())) {
+                                    saveMemeDetails(result.meme.id, details)
+                                    searchRepository.indexMeme(result.meme.id)
+                                }
+                                remaining.remove(source)
+                            }
                         }
 
                         is ImportResult.Duplicate -> {
@@ -86,6 +119,7 @@ class ImportViewModel @Inject constructor(
                     it.copy(
                         importing = false,
                         sources = remaining.toList(),
+                        detailsBySource = it.detailsBySource.filterKeys { source -> source in remaining },
                         summary = ImportSummary.Completed(imported, duplicates, failed)
                     )
                 }

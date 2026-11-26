@@ -27,7 +27,7 @@
     <string name="library_sort">Сортировка</string>
     <string name="library_sort_added_at">По дате добавления</string>
     <string name="library_sort_usage_count">По частоте использования</string>
-    <string name="library_sort_last_used">По последнему использованию</string>
+    <string name="library_sort_media_type">По типу файла</string>
 
     <string name="albums_empty">Здесь будут ваши альбомы</string>
     <string name="albums_create">Создать альбом</string>
@@ -104,6 +104,9 @@
     <string name="library_copy">Копировать</string>
     <string name="library_copy_success">Мем скопирован</string>
     <string name="library_copy_error">Не удалось скопировать мем</string>
+    <string name="library_share">Поделиться</string>
+    <string name="library_share_chooser">Отправить мем</string>
+    <string name="library_share_error">Не удалось открыть меню отправки</string>
     <string name="library_favorite">Добавить в избранное</string>
     <string name="library_remove_favorite">Убрать из избранного</string>
     <string name="library_more_actions">Дополнительные действия</string>

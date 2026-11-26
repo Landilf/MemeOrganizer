@@ -27,31 +27,58 @@ fun MemeEditDialog(
     onTags: (List<String>) -> Unit,
     onSave: () -> Unit,
     onClose: () -> Unit
+) = MemeDetailsEditorDialog(
+    editorKey = state.memeId.toString(),
+    description = state.description,
+    tags = state.tags,
+    original = state.original,
+    loading = state.loading,
+    saving = state.saving,
+    error = state.error,
+    suggestions = suggestions,
+    onDescription = onDescription,
+    onTags = onTags,
+    onSave = onSave,
+    onClose = onClose
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun MemeDetailsEditorDialog(
+    editorKey: String,
+    description: String,
+    tags: List<String>,
+    original: MemeDetails?,
+    suggestions: List<TagSuggestion>,
+    loading: Boolean = false,
+    saving: Boolean = false,
+    error: Boolean = false,
+    onDescription: (String) -> Unit,
+    onTags: (List<String>) -> Unit,
+    onSave: () -> Unit,
+    onClose: () -> Unit
 ) {
-    var input by rememberSaveable(state.memeId) { mutableStateOf("") }
-    var error by rememberSaveable(state.memeId) { mutableStateOf(false) }
-    var confirmClose by rememberSaveable(state.memeId) { mutableStateOf(false) }
+    var input by rememberSaveable(editorKey) { mutableStateOf("") }
+    var inputError by rememberSaveable(editorKey) { mutableStateOf(false) }
+    var confirmClose by rememberSaveable(editorKey) { mutableStateOf(false) }
     fun close() {
-        if (state.saving) return
-        if (input.isNotBlank() || (state.original != null && MemeDetails(
-                state.description,
-                state.tags
-            ) != state.original)
+        if (saving) return
+        if (input.isNotBlank() || (original != null && MemeDetails(description, tags) != original)
         ) confirmClose = true else onClose()
     }
 
     fun addTag(name: String) {
         val value = name.trim()
-        if (value.isEmpty() || value.length > MemeTextRules.MAX_TAG_LENGTH || state.tags.any {
+        if (value.isEmpty() || value.length > MemeTextRules.MAX_TAG_LENGTH || tags.any {
                 MemeTextRules.normalizeTag(
                     it
                 ) == MemeTextRules.normalizeTag(value)
             }) {
-            error = true
+            inputError = true
         } else {
-            onTags(state.tags + value)
+            onTags(tags + value)
             input = ""
-            error = false
+            inputError = false
         }
     }
     if (confirmClose) AlertDialog(
@@ -84,9 +111,9 @@ fun MemeEditDialog(
                     stringResource(R.string.edit_title),
                     style = MaterialTheme.typography.titleLarge
                 )
-                if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth()) else {
+                if (loading) LinearProgressIndicator(Modifier.fillMaxWidth()) else {
                     OutlinedTextField(
-                        value = state.description,
+                        value = description,
                         onValueChange = {
                             if (it.length <= MemeTextRules.MAX_DESCRIPTION_LENGTH) onDescription(it)
                         },
@@ -95,54 +122,54 @@ fun MemeEditDialog(
                             Text(
                                 stringResource(
                                     R.string.edit_description_count,
-                                    state.description.length,
+                                    description.length,
                                     MemeTextRules.MAX_DESCRIPTION_LENGTH
                                 )
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        enabled = !state.saving
+                        enabled = !saving
                     )
                     Row(Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = input,
                             onValueChange = {
                                 if (it.length <= MemeTextRules.MAX_TAG_LENGTH) {
-                                    input = it; error = false
+                                    input = it; inputError = false
                                 }
                             },
                             label = { Text(stringResource(R.string.edit_tag)) },
-                            isError = error,
+                            isError = inputError,
                             modifier = Modifier.weight(1f),
                             singleLine = true,
-                            enabled = !state.saving
+                            enabled = !saving
                         )
-                        IconButton(onClick = { addTag(input) }, enabled = !state.saving) {
+                        IconButton(onClick = { addTag(input) }, enabled = !saving) {
                             Icon(
                                 Icons.Default.Add,
                                 stringResource(R.string.edit_add_tag)
                             )
                         }
                     }
-                    if (error) Text(
+                    if (inputError) Text(
                         stringResource(R.string.edit_invalid_tag),
                         color = MaterialTheme.colorScheme.error
                     )
                     MemeTextRules.suggestions(suggestions, input).filterNot { suggestion ->
-                        state.tags.any {
+                        tags.any {
                             MemeTextRules.normalizeTag(it) == MemeTextRules.normalizeTag(suggestion.name)
                         }
                     }.take(8).forEach { suggestion ->
                         TextButton(
                             onClick = { addTag(suggestion.name) },
-                            enabled = !state.saving
+                            enabled = !saving
                         ) { Text(suggestion.name) }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        state.tags.forEach { tag ->
+                        tags.forEach { tag ->
                             InputChip(
                                 selected = true,
-                                onClick = { onTags(state.tags - tag) },
+                                onClick = { onTags(tags - tag) },
                                 label = { Text(tag) },
                                 trailingIcon = {
                                     Icon(
@@ -150,11 +177,11 @@ fun MemeEditDialog(
                                         stringResource(R.string.edit_remove_tag, tag)
                                     )
                                 },
-                                enabled = !state.saving
+                                enabled = !saving
                             )
                         }
                     }
-                    if (state.error) Text(
+                    if (error) Text(
                         stringResource(R.string.edit_error),
                         color = MaterialTheme.colorScheme.error
                     )
@@ -162,11 +189,11 @@ fun MemeEditDialog(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(
                         onClick = ::close,
-                        enabled = !state.saving
+                        enabled = !saving
                     ) { Text(stringResource(R.string.cancel_button)) }
                     TextButton(
-                        onClick = { if (input.isNotBlank()) error = true else onSave() },
-                        enabled = !state.loading && !state.saving && state.original != null
+                        onClick = { if (input.isNotBlank()) inputError = true else onSave() },
+                        enabled = !loading && !saving && original != null
                     ) { Text(stringResource(R.string.edit_save)) }
                 }
             }

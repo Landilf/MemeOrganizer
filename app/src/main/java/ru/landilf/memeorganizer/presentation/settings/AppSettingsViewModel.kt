@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.domain.model.settings.AppSettings
 import ru.landilf.memeorganizer.domain.model.settings.LibrarySort
+import ru.landilf.memeorganizer.domain.model.settings.SortDirection
 import ru.landilf.memeorganizer.domain.repository.AppSettingsRepository
 import javax.inject.Inject
 
@@ -20,6 +21,10 @@ class AppSettingsViewModel @Inject constructor(
 
     fun setLibrarySort(sort: LibrarySort) {
         viewModelScope.launch { repository.setLibrarySort(sort) }
+    }
+
+    fun setLibrarySortDirection(direction: SortDirection) {
+        viewModelScope.launch { repository.setLibrarySortDirection(direction) }
     }
 
     fun setRecentlyAddedAlbumVisible(visible: Boolean) {

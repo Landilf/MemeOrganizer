@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
@@ -24,8 +25,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.presentation.common.FullMedia
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
+import ru.landilf.memeorganizer.presentation.library.MemeDetailsEditorDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -36,7 +40,9 @@ fun ImportScreen(state: ImportUiState, viewModel: ImportViewModel, onClose: () -
     var fullScreenSource by rememberSaveable { mutableStateOf<String?>(null) }
     var viewerControlsVisible by rememberSaveable { mutableStateOf(true) }
     var pendingRemoval by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    var editingSource by rememberSaveable { mutableStateOf<String?>(null) }
     val context = LocalContext.current
+    val tags by viewModel.tags.collectAsStateWithLifecycle()
     fun back() {
         when {
             state.importing -> Unit
@@ -106,6 +112,30 @@ fun ImportScreen(state: ImportUiState, viewModel: ImportViewModel, onClose: () -
             }
         )
     }
+    editingSource?.let { source ->
+        val savedDetails = state.detailsBySource[source] ?: MemeDetails("", emptyList())
+        var draftDetails by remember(source) {
+            mutableStateOf(savedDetails)
+        }
+        MemeDetailsEditorDialog(
+            editorKey = "import:$source",
+            description = draftDetails.description,
+            tags = draftDetails.tags,
+            original = savedDetails,
+            suggestions = tags,
+            onDescription = { description ->
+                draftDetails = draftDetails.copy(description = description)
+            },
+            onTags = { newTags ->
+                draftDetails = draftDetails.copy(tags = newTags)
+            },
+            onSave = {
+                viewModel.updateDetails(source, draftDetails)
+                editingSource = null
+            },
+            onClose = { editingSource = null }
+        )
+    }
     if (fullScreenSource != null && state.sources.isNotEmpty()) {
         val start = state.sources.indexOf(fullScreenSource).coerceAtLeast(0)
         val pager = rememberPagerState(initialPage = start, pageCount = { state.sources.size })
@@ -161,6 +191,14 @@ fun ImportScreen(state: ImportUiState, viewModel: ImportViewModel, onClose: () -
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
+                            IconButton(onClick = {
+                                editingSource = state.sources[pager.currentPage]
+                            }) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    stringResource(R.string.edit_title)
+                                )
+                            }
                             IconButton(onClick = {
                                 val current = pager.currentPage.coerceIn(state.sources.indices)
                                 fullScreenSource = state.sources[current]
