@@ -58,7 +58,8 @@ object AppLogger {
 }
 
 internal class DebugLogStore(context: Context) {
-    private val file = File(context.filesDir, "debug/events.onl")
+    private val file = File(context.filesDir, "debug/events.jsonl")
+    private val legacyFile = File(context.filesDir, "debug/events.onl")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val writeLock = Mutex()
 
@@ -82,6 +83,7 @@ internal class DebugLogStore(context: Context) {
     suspend fun clear() {
         writeLock.withLock {
             file.delete()
+            legacyFile.delete()
         }
     }
 

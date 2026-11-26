@@ -74,6 +74,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
                     query = query,
                     modelPackage = modelPackage,
                     databaseMs = databaseMs,
+                    modelMs = null,
                     denseMs = null,
                     bm25Ms = null,
                     totalMs = elapsedMs(totalStartedAt)
@@ -107,9 +108,25 @@ class MemeSearchRepositoryImpl @Inject constructor(
                     query = query,
                     modelPackage = modelPackage,
                     databaseMs = databaseMs,
+                    modelMs = encodeMs,
                     denseMs = denseMs,
                     bm25Ms = bm25Ms,
-                    totalMs = elapsedMs(totalStartedAt)
+                    totalMs = elapsedMs(totalStartedAt),
+                    candidates = candidatesJson(
+                        indexed = indexed,
+                        denseScores = denseScores,
+                        bm25Scores = bm25Scores,
+                        candidateIndexes = diagnosticIndexes(
+                            ranked = emptyList(),
+                            totalCandidates = indexed.indices,
+                            denseScores = denseScores,
+                            bm25Scores = bm25Scores
+                        ),
+                        displayedRanks = emptyMap(),
+                        normalizedDenseByIndex = emptyMap(),
+                        normalizedBm25ByIndex = emptyMap(),
+                        finalScores = emptyMap()
+                    )
                 )
                 return@withContext emptyList()
             }
@@ -127,6 +144,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
             val ranked = relevantIndexes.sortedByDescending { index ->
                 requireNotNull(finalScores[index])
             }
+            val displayedRanks = ranked.mapIndexed { position, index -> index to position + 1 }.toMap()
             val fusionMs = elapsedMs(fusionStartedAt)
             val memesById =
                 memeDao.getByIds(ranked.map { indexed[it].first.memeId }).associateBy { it.id }
@@ -163,44 +181,24 @@ class MemeSearchRepositoryImpl @Inject constructor(
                             .put("fusion", fusionMs)
                     ).put("total", elapsedMs(totalStartedAt))
                 )
-                .put("candidates", JSONArray().apply {
-                    ranked.take(20).forEachIndexed { position, index ->
-                        val document = indexed[index].first
-                        val meme = memesById[document.memeId] ?: return@forEachIndexed
-                        put(
-                            JSONObject().put("rank", position + 1)
-                                .put("file_hash", meme.contentHash).put("file_name", meme.fileName)
-                                .put("mime_type", meme.mimeType)
-                                .put(
-                                    "candidate_input",
-                                    JSONObject().put("description", document.description).put(
-                                        "tags",
-                                        JSONArray(
-                                            document.tags.split('\u001f').filter(String::isNotBlank)
-                                        )
-                                    ).put("indexed_text", documentText(document))
-                                )
-                                .put(
-                                    "scores",
-                                    JSONObject().put("text_raw", denseScores[index])
-                                        .put("bm25_raw", bm25Scores[index]).put(
-                                        "text_normalized",
-                                        requireNotNull(normalizedDenseByIndex[index])
-                                    ).put(
-                                        "bm25_normalized",
-                                        requireNotNull(normalizedBm25ByIndex[index])
-                                    ).put("final", requireNotNull(finalScores[index]))
-                                )
-                                .put(
-                                    "relevance",
-                                    relevanceDecisionJson(
-                                        rawCosine = denseScores[index],
-                                        rawBm25 = bm25Scores[index]
-                                    )
-                                )
-                        )
-                    }
-                })
+                .put(
+                    "candidates",
+                    candidatesJson(
+                        indexed = indexed,
+                        denseScores = denseScores,
+                        bm25Scores = bm25Scores,
+                        candidateIndexes = diagnosticIndexes(
+                            ranked = ranked,
+                            totalCandidates = indexed.indices,
+                            denseScores = denseScores,
+                            bm25Scores = bm25Scores
+                        ),
+                        displayedRanks = displayedRanks,
+                        normalizedDenseByIndex = normalizedDenseByIndex,
+                        normalizedBm25ByIndex = normalizedBm25ByIndex,
+                        finalScores = finalScores
+                    )
+                )
             )
             results.also { results ->
                 val elapsedMs =
@@ -299,13 +297,98 @@ class MemeSearchRepositoryImpl @Inject constructor(
     private fun elapsedMs(startedAt: Long): Long =
         (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000L
 
+    private fun diagnosticIndexes(
+        ranked: List<Int>,
+        totalCandidates: IntRange,
+        denseScores: List<Float>,
+        bm25Scores: List<Float>
+    ): List<Int> {
+        val rankedSet = ranked.toHashSet()
+        val rejected = totalCandidates
+            .filterNot(rankedSet::contains)
+            .sortedByDescending { index ->
+                maxOf(
+                    denseScores[index] / COSINE_THRESHOLD,
+                    bm25Scores[index] / BM25_THRESHOLD
+                )
+            }
+        return (ranked + rejected).take(MAX_LOGGED_CANDIDATES)
+    }
+
+    private suspend fun candidatesJson(
+        indexed: List<Pair<SearchDocumentRow, TextEmbeddingEntity>>,
+        denseScores: List<Float>,
+        bm25Scores: List<Float>,
+        candidateIndexes: List<Int>,
+        displayedRanks: Map<Int, Int>,
+        normalizedDenseByIndex: Map<Int, Float>,
+        normalizedBm25ByIndex: Map<Int, Float>,
+        finalScores: Map<Int, Float>
+    ): JSONArray {
+        val memesById = memeDao.getByIds(
+            candidateIndexes.map { index -> indexed[index].first.memeId }
+        ).associateBy { meme -> meme.id }
+        return JSONArray().apply {
+            candidateIndexes.forEachIndexed { diagnosticOrder, index ->
+                val document = indexed[index].first
+                val meme = memesById[document.memeId] ?: return@forEachIndexed
+                val displayedRank = displayedRanks[index]
+                put(
+                    JSONObject()
+                        .put("diagnostic_order", diagnosticOrder + 1)
+                        .put("rank", displayedRank ?: JSONObject.NULL)
+                        .put("displayed", displayedRank != null)
+                        .put("file_hash", meme.contentHash)
+                        .put("file_name", meme.fileName)
+                        .put("mime_type", meme.mimeType)
+                        .put(
+                            "candidate_input",
+                            JSONObject()
+                                .put("description", document.description)
+                                .put(
+                                    "tags",
+                                    JSONArray(
+                                        document.tags.split('\u001f').filter(String::isNotBlank)
+                                    )
+                                )
+                                .put("indexed_text", documentText(document))
+                        )
+                        .put(
+                            "scores",
+                            JSONObject()
+                                .put("text_raw", denseScores[index])
+                                .put("bm25_raw", bm25Scores[index])
+                                .put(
+                                    "text_normalized",
+                                    normalizedDenseByIndex[index] ?: JSONObject.NULL
+                                )
+                                .put(
+                                    "bm25_normalized",
+                                    normalizedBm25ByIndex[index] ?: JSONObject.NULL
+                                )
+                                .put("final", finalScores[index] ?: JSONObject.NULL)
+                        )
+                        .put(
+                            "relevance",
+                            relevanceDecisionJson(
+                                rawCosine = denseScores[index],
+                                rawBm25 = bm25Scores[index]
+                            )
+                        )
+                )
+            }
+        }
+    }
+
     private suspend fun recordEmptySearchImpression(
         query: String,
         modelPackage: TextModelPackage,
         databaseMs: Long,
+        modelMs: Long?,
         denseMs: Long?,
         bm25Ms: Long?,
-        totalMs: Long
+        totalMs: Long,
+        candidates: JSONArray = JSONArray()
     ) {
         lightLog.record(
             "search_impression",
@@ -319,7 +402,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
                         .put("database_search", databaseMs)
                         .put(
                             "model", JSONObject()
-                                .put("text_encoder", JSONObject.NULL)
+                                .put("text_encoder", modelMs ?: JSONObject.NULL)
                                 .put("visual_text_encoder", JSONObject.NULL)
                                 .put("reranker", JSONObject.NULL)
                         )
@@ -331,7 +414,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
                         )
                         .put("total", totalMs)
                 )
-                .put("candidates", JSONArray())
+                .put("candidates", candidates)
         )
     }
 
@@ -389,5 +472,6 @@ class MemeSearchRepositoryImpl @Inject constructor(
     private companion object {
         const val COSINE_THRESHOLD = 0.25f
         const val BM25_THRESHOLD = 3.5f
+        const val MAX_LOGGED_CANDIDATES = 20
     }
 }
