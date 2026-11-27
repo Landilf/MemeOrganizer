@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MemeOrganaizer"
+rootProject.name = "MemeOrganizer"
 include(":app")
  
