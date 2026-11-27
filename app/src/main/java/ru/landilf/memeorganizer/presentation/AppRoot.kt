@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
@@ -177,6 +178,8 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                 val memes by libraryViewModel.memes.collectAsStateWithLifecycle()
                 val albums by libraryViewModel.albums.collectAsStateWithLifecycle()
                 val indexingStatuses by libraryViewModel.indexingStatuses.collectAsStateWithLifecycle()
+                val manualIndexingInProgress by libraryViewModel.manualIndexingInProgress
+                    .collectAsStateWithLifecycle()
                 val appSettings by appSettingsViewModel.settings.collectAsStateWithLifecycle()
                 MainTabsScreen(
                     onSettingsClick = { navController.navigate("settings") },
@@ -189,6 +192,7 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                     memes = memes,
                     albums = albums,
                     indexingStatuses = indexingStatuses,
+                    manualIndexingInProgress = manualIndexingInProgress,
                     appSettings = appSettings,
                     libraryViewModel = libraryViewModel,
                     onLibrarySortSelected = appSettingsViewModel::setLibrarySort,
@@ -441,6 +445,7 @@ private fun MainTabsScreen(
     memes: List<Meme>,
     albums: List<Album>,
     indexingStatuses: Map<Long, MediaIndexingStatus>,
+    manualIndexingInProgress: Boolean,
     appSettings: AppSettings,
     libraryViewModel: LibraryViewModel,
     onLibrarySortSelected: (LibrarySort) -> Unit,
@@ -470,6 +475,7 @@ private fun MainTabsScreen(
     var renamedAlbumName by rememberSaveable { mutableStateOf("") }
     var selected by remember { mutableStateOf(setOf<Long>()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var manualIndexingOnlyFailed by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
     val albumCreationError by libraryViewModel.albumCreationError.collectAsStateWithLifecycle()
     val albumRenameError by libraryViewModel.albumRenameError.collectAsStateWithLifecycle()
@@ -495,6 +501,7 @@ private fun MainTabsScreen(
     val albumWithOptions = albums.firstOrNull { it.id == albumOptionsId }
     val albumToRename = albums.firstOrNull { it.id == albumRenameId }
     val albumToDelete = albums.firstOrNull { it.id == albumDeleteId }
+    val failedIndexingCount = indexingStatuses.count { it.value == MediaIndexingStatus.Failed }
     LaunchedEffect(openedAlbumId) {
         openedAlbumId?.let(libraryViewModel::openAlbum) ?: libraryViewModel.closeAlbum()
     }
@@ -657,6 +664,55 @@ private fun MainTabsScreen(
             }
         )
     }
+    manualIndexingOnlyFailed?.let { onlyFailed ->
+        val affectedCount = if (onlyFailed) failedIndexingCount else memes.size
+        AlertDialog(
+            onDismissRequest = { manualIndexingOnlyFailed = null },
+            title = {
+                Text(
+                    stringResource(
+                        if (onlyFailed) {
+                            R.string.library_retry_failed_indexing_title
+                        } else {
+                            R.string.library_reprocess_all_title
+                        }
+                    )
+                )
+            },
+            text = {
+                Text(
+                    stringResource(
+                        if (onlyFailed) {
+                            R.string.library_retry_failed_indexing_message
+                        } else {
+                            R.string.library_reprocess_all_message
+                        },
+                        affectedCount
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    manualIndexingOnlyFailed = null
+                    libraryViewModel.scheduleManualIndexing(onlyFailed) { scheduledCount ->
+                        scope.launch {
+                            snackbar.showSnackbar(
+                                context.getString(
+                                    R.string.library_indexing_scheduled,
+                                    scheduledCount
+                                )
+                            )
+                        }
+                    }
+                }) { Text(stringResource(R.string.library_reprocess_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { manualIndexingOnlyFailed = null }) {
+                    Text(stringResource(R.string.cancel_button))
+                }
+            }
+        )
+    }
     if (albumPickerVisible) {
         AlbumPickerDialog(
             albums = albums,
@@ -785,6 +841,15 @@ private fun MainTabsScreen(
                                 }
                             }
                         }
+                    }
+                    IconButton(
+                        onClick = { manualIndexingOnlyFailed = failedIndexingCount > 0 },
+                        enabled = memes.isNotEmpty() && !manualIndexingInProgress
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = stringResource(R.string.library_reprocess)
+                        )
                     }
                     IconButton(onClick = onSearchClick) {
                         Icon(

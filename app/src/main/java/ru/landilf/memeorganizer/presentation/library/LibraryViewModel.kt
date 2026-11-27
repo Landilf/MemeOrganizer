@@ -79,6 +79,8 @@ class LibraryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val indexingStatuses = mediaIndexingRepository.observeStatuses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    private val _manualIndexingInProgress = MutableStateFlow(false)
+    val manualIndexingInProgress = _manualIndexingInProgress.asStateFlow()
     private val _edit = MutableStateFlow<EditState?>(null)
     val edit = _edit.asStateFlow()
     private val _deleteError = MutableStateFlow(false)
@@ -144,6 +146,27 @@ class LibraryViewModel @Inject constructor(
                         error = true
                     ) else it
                 }
+            }
+        }
+    }
+
+    fun scheduleManualIndexing(onlyFailed: Boolean, onScheduled: (Int) -> Unit) {
+        if (_manualIndexingInProgress.value) return
+        _manualIndexingInProgress.value = true
+        viewModelScope.launch {
+            try {
+                val count = if (onlyFailed) {
+                    mediaIndexingRepository.retryFailed()
+                } else {
+                    mediaIndexingRepository.reprocessAll()
+                }
+                onScheduled(count)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppLogger.app { "media_indexing.manual_schedule.failed type=${error.javaClass.simpleName}" }
+            } finally {
+                _manualIndexingInProgress.value = false
             }
         }
     }

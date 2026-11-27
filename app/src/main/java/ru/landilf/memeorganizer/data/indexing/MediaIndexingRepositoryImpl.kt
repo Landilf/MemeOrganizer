@@ -8,11 +8,14 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
 import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingEntity
 import ru.landilf.memeorganizer.data.device.BatteryStateChecker
@@ -23,28 +26,42 @@ import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 class MediaIndexingRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val indexingDao: MediaIndexingDao,
+    private val memeDao: MemeDao,
     private val batteryStateChecker: BatteryStateChecker,
     private val indexingNotifier: IndexingNotifier
 ) : MediaIndexingRepository {
     override suspend fun enqueue(memeId: Long) {
-        val waitingForBattery = batteryStateChecker.needsHeavyWorkConfirmation()
-        indexingDao.upsert(
-            MediaIndexingEntity(
-                memeId = memeId,
-                status = MediaIndexingStatus.Pending.storageValue,
-                attemptCount = 0,
-                lastError = if (waitingForBattery) BATTERY_LOW_REASON else null,
-                updatedAtMillis = System.currentTimeMillis()
-            )
-        )
-        if (waitingForBattery) indexingNotifier.waitingForBattery()
-        enqueueWork(memeId)
+        schedule(listOf(memeId))
     }
 
     override suspend fun resumePending() {
-        for (memeId in indexingDao.getMemeIdsByStatus(MediaIndexingStatus.Pending.storageValue)) {
-            enqueue(memeId)
+        schedule(indexingDao.getMemeIdsByStatus(MediaIndexingStatus.Pending.storageValue))
+    }
+
+    override suspend fun retryFailed(): Int = schedule(
+        indexingDao.getMemeIdsByStatus(MediaIndexingStatus.Failed.storageValue)
+    )
+
+    override suspend fun reprocessAll(): Int = schedule(memeDao.getAll().map { it.id })
+
+    private suspend fun schedule(memeIds: List<Long>): Int = withContext(Dispatchers.IO) {
+        if (memeIds.isEmpty()) return@withContext 0
+        val waitingForBattery = batteryStateChecker.needsHeavyWorkConfirmation()
+        val updatedAtMillis = System.currentTimeMillis()
+        memeIds.forEach { memeId ->
+            indexingDao.upsert(
+                MediaIndexingEntity(
+                    memeId = memeId,
+                    status = MediaIndexingStatus.Pending.storageValue,
+                    attemptCount = 0,
+                    lastError = if (waitingForBattery) BATTERY_LOW_REASON else null,
+                    updatedAtMillis = updatedAtMillis
+                )
+            )
         }
+        if (waitingForBattery) indexingNotifier.waitingForBattery()
+        memeIds.forEach(::enqueueWork)
+        memeIds.size
     }
 
     override fun observeStatuses(): Flow<Map<Long, MediaIndexingStatus>> =

@@ -45,6 +45,8 @@ class ImportViewModelTest {
     private val mediaIndexingRepository = object : MediaIndexingRepository {
         override suspend fun enqueue(memeId: Long) = Unit
         override suspend fun resumePending() = Unit
+        override suspend fun retryFailed() = 0
+        override suspend fun reprocessAll() = 0
         override fun observeStatuses() = flowOf(emptyMap<Long, MediaIndexingStatus>())
     }
 

@@ -31,6 +31,13 @@
     <string name="indexing_status_pending">Ожидает</string>
     <string name="indexing_status_partial">Текст готов</string>
     <string name="indexing_status_failed">Ошибка</string>
+    <string name="library_reprocess">Повторить обработку</string>
+    <string name="library_retry_failed_indexing_title">Повторить обработку ошибок?</string>
+    <string name="library_retry_failed_indexing_message">Будут повторно обработаны только файлы с ошибкой: %1$d. Остальные файлы не изменятся.</string>
+    <string name="library_reprocess_all_title">Повторно обработать библиотеку?</string>
+    <string name="library_reprocess_all_message">Будут повторно обработаны все файлы: %1$d. Это может занять время и увеличить расход заряда.</string>
+    <string name="library_reprocess_confirm">Запустить</string>
+    <string name="library_indexing_scheduled">Обработка добавлена в очередь: %1$d.</string>
 
     <string name="albums_empty">Здесь будут ваши альбомы</string>
     <string name="albums_create">Создать альбом</string>
