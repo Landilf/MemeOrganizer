@@ -4,7 +4,7 @@ import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.model.search.SearchPreparation
 
 interface MemeSearchRepository {
-    /** Indexes descriptions and tags whose content or model version changed. */
+    /** Checks whether the text-search model is available without starting foreground indexing. */
     suspend fun prepare(): SearchPreparation
 
     /** Rebuilds every text embedding using the currently installed model. */

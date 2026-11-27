@@ -38,11 +38,9 @@ class MemeSearchRepositoryImpl @Inject constructor(
     private val lightLog: LightLogStore
 ) : MemeSearchRepository {
     override suspend fun prepare(): SearchPreparation = withContext(Dispatchers.IO) {
-        val modelPackage =
-            installer.activePackage() ?: return@withContext SearchPreparation(false, 0)
-        val documents = embeddingDao.searchDocuments()
-        AppLogger.ml { "index.prepare documents=${documents.size}" }
-        SearchPreparation(true, indexDocuments(modelPackage, documents))
+        // Indexing is scheduled through WorkManager. Opening search must never synchronously load
+        // a model or process the whole library on the foreground path.
+        SearchPreparation(installer.activePackage() != null, 0)
     }
 
     override suspend fun reindexAll(): SearchPreparation = withContext(Dispatchers.IO) {

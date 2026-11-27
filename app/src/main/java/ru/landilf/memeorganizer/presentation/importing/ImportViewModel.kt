@@ -14,7 +14,7 @@ import ru.landilf.memeorganizer.domain.model.importing.ImportResult
 import ru.landilf.memeorganizer.domain.model.importing.ImportSource
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
-import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import ru.landilf.memeorganizer.domain.usecase.meme.ImportMemesUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 import javax.inject.Inject
@@ -39,7 +39,7 @@ class ImportViewModel @Inject constructor(
     private val importMemes: ImportMemesUseCase,
     private val detailsRepository: MemeDetailsRepository,
     private val saveMemeDetails: SaveMemeDetailsUseCase,
-    private val searchRepository: MemeSearchRepository,
+    private val mediaIndexingRepository: MediaIndexingRepository,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val _state =
@@ -99,8 +99,8 @@ class ImportViewModel @Inject constructor(
                                 val details = _state.value.detailsBySource[source]
                                 if (details != null && (details.description.isNotBlank() || details.tags.isNotEmpty())) {
                                     saveMemeDetails(result.meme.id, details)
-                                    searchRepository.indexMeme(result.meme.id)
                                 }
+                                mediaIndexingRepository.enqueue(result.meme.id)
                                 remaining.remove(source)
                             }
                         }

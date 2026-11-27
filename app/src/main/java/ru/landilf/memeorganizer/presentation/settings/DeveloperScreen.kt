@@ -1,5 +1,8 @@
 package ru.landilf.memeorganizer.presentation.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -26,7 +29,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
@@ -34,10 +39,15 @@ import ru.landilf.memeorganizer.R
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
+    val context = LocalContext.current
     val status by viewModel.status.collectAsStateWithLifecycle()
     val reindexedCount by viewModel.reindexedCount.collectAsStateWithLifecycle()
+    val lowBatteryConfirmationRequired by viewModel.lowBatteryConfirmationRequired.collectAsStateWithLifecycle()
     var includeMedia by rememberSaveable { mutableStateOf(true) }
     var clearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { viewModel.requestReindexAll() }
     val filePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(if (includeMedia) "application/zip" else "application/gzip")) { uri ->
             if (uri != null) viewModel.export(uri, includeMedia)
@@ -70,6 +80,23 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                     TextButton(onClick = {
                         clearConfirmationVisible = false
                     }) { Text(stringResource(R.string.no_button)) }
+                }
+            )
+        }
+        if (lowBatteryConfirmationRequired) {
+            AlertDialog(
+                onDismissRequest = viewModel::dismissLowBatteryConfirmation,
+                title = { Text(stringResource(R.string.developer_low_battery_title)) },
+                text = { Text(stringResource(R.string.developer_low_battery_message)) },
+                confirmButton = {
+                    TextButton(onClick = viewModel::confirmReindexAtLowBattery) {
+                        Text(stringResource(R.string.yes_button))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::dismissLowBatteryConfirmation) {
+                        Text(stringResource(R.string.no_button))
+                    }
                 }
             )
         }
@@ -106,7 +133,19 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_clear_logs)) }
             OutlinedButton(
-                onClick = viewModel::reindexAll,
+                onClick = {
+                    if (
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        viewModel.requestReindexAll()
+                    }
+                },
                 enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_reindex_all)) }

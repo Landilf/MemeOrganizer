@@ -20,7 +20,7 @@ import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeExportRepository
-import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.DeleteAlbumUseCase
@@ -62,7 +62,7 @@ class LibraryViewModel @Inject constructor(
     private val deleteAlbumUseCase: DeleteAlbumUseCase,
     private val removeMemesFromAlbumUseCase: RemoveMemesFromAlbumUseCase,
     private val memeExportRepository: MemeExportRepository,
-    private val searchRepository: MemeSearchRepository,
+    private val mediaIndexingRepository: MediaIndexingRepository,
     private val searchActionLog: SearchActionLogWriter
 ) : ViewModel() {
     val memes =
@@ -132,7 +132,7 @@ class LibraryViewModel @Inject constructor(
             try {
                 saveDetails(current.memeId, MemeDetails(current.description, current.tags))
                 _edit.update { if (it?.memeId == current.memeId) null else it }
-                launch { searchRepository.indexMeme(current.memeId) }
+                launch { mediaIndexingRepository.enqueue(current.memeId) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

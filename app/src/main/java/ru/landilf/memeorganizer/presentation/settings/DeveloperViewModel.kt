@@ -11,9 +11,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.core.logging.DebugLogExporter
+import ru.landilf.memeorganizer.data.device.BatteryStateChecker
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestResult
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestRunner
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
+import ru.landilf.memeorganizer.data.indexing.IndexingNotifier
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 import javax.inject.Inject
 
@@ -40,12 +42,16 @@ class DeveloperViewModel @Inject constructor(
     private val exporter: DebugLogExporter,
     private val searchRepository: MemeSearchRepository,
     private val modelInstaller: LocalModelInstaller,
-    private val fusionSmokeTestRunner: FusionSmokeTestRunner
+    private val fusionSmokeTestRunner: FusionSmokeTestRunner,
+    private val batteryStateChecker: BatteryStateChecker,
+    private val indexingNotifier: IndexingNotifier
 ) : ViewModel() {
     private val _status = MutableStateFlow(DebugExportStatus.Idle)
     val status = _status.asStateFlow()
     private val _reindexedCount = MutableStateFlow(0)
     val reindexedCount = _reindexedCount.asStateFlow()
+    private val _lowBatteryConfirmationRequired = MutableStateFlow(false)
+    val lowBatteryConfirmationRequired = _lowBatteryConfirmationRequired.asStateFlow()
 
     fun export(destination: Uri, includeMedia: Boolean) {
         if (_status.value.isBusy()) return
@@ -85,7 +91,25 @@ class DeveloperViewModel @Inject constructor(
         }
     }
 
-    fun reindexAll() {
+    fun requestReindexAll() {
+        if (_status.value.isBusy()) return
+        if (batteryStateChecker.needsHeavyWorkConfirmation()) {
+            _lowBatteryConfirmationRequired.value = true
+        } else {
+            reindexAll()
+        }
+    }
+
+    fun confirmReindexAtLowBattery() {
+        _lowBatteryConfirmationRequired.value = false
+        reindexAll()
+    }
+
+    fun dismissLowBatteryConfirmation() {
+        _lowBatteryConfirmationRequired.value = false
+    }
+
+    private fun reindexAll() {
         if (_status.value.isBusy()) return
         _status.value = DebugExportStatus.Reindexing
         viewModelScope.launch {
@@ -93,6 +117,7 @@ class DeveloperViewModel @Inject constructor(
                 val result = searchRepository.reindexAll()
                 _reindexedCount.value = result.indexedCount
                 _status.value = if (result.modelAvailable) {
+                    indexingNotifier.completed()
                     DebugExportStatus.ReindexSuccess
                 } else {
                     DebugExportStatus.ReindexModelUnavailable
@@ -101,6 +126,7 @@ class DeveloperViewModel @Inject constructor(
                 throw error
             } catch (error: Exception) {
                 AppLogger.app { "debug.reindex.failed type=${error.javaClass.simpleName}" }
+                indexingNotifier.failed()
                 _status.value = DebugExportStatus.ReindexError
             }
         }

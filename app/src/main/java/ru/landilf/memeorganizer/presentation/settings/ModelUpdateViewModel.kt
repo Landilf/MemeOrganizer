@@ -15,6 +15,7 @@ import ru.landilf.memeorganizer.data.ml.ModelDownloadProgress
 import ru.landilf.memeorganizer.data.ml.ModelRelease
 import ru.landilf.memeorganizer.data.ml.ModelUpdateCheck
 import ru.landilf.memeorganizer.data.ml.ModelUpdateOfflineException
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import javax.inject.Inject
 
 enum class ModelUpdateNotice { None, UpToDate, Offline, Installed, InsufficientStorage, Error }
@@ -27,7 +28,10 @@ data class ModelUpdateUiState(
 )
 
 @HiltViewModel
-class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelUpdater) :
+class ModelUpdateViewModel @Inject constructor(
+    private val updater: GitHubModelUpdater,
+    private val mediaIndexingRepository: MediaIndexingRepository
+) :
     ViewModel() {
     private val _state = MutableStateFlow(ModelUpdateUiState())
     val state = _state.asStateFlow()
@@ -95,6 +99,13 @@ class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelU
         viewModelScope.launch {
             try {
                 updater.downloadAndInstall(release) { progress -> _state.update { it.copy(progress = progress) } }
+                try {
+                    mediaIndexingRepository.resumePending()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    AppLogger.mlError(error) { "media_indexing.resume.failed" }
+                }
                 _state.update {
                     it.copy(
                         available = null,
