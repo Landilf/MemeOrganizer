@@ -19,6 +19,7 @@ import ru.landilf.memeorganizer.domain.model.importing.ImportSource
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.model.meme.TagSuggestion
+import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.model.search.SearchPreparation
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeRepository
@@ -46,7 +47,7 @@ class ImportViewModelTest {
         override suspend fun prepare() = SearchPreparation(false, 0)
         override suspend fun reindexAll() = SearchPreparation(false, 0)
         override suspend fun indexMeme(memeId: Long) = Unit
-        override suspend fun search(query: String) = emptyList()
+        override suspend fun search(query: String) = emptyList<MemeSearchResult>()
     }
 
     private fun createViewModel(savedState: SavedStateHandle) = ImportViewModel(
