@@ -83,10 +83,14 @@ fun ImportScreen(state: ImportUiState, viewModel: ImportViewModel, onClose: () -
             onDismissRequest = { pendingRemoval = emptyList() },
             title = {
                 Text(
-                    if (pendingRemoval.size == 1) stringResource(R.string.import_remove_confirmation_title) else stringResource(
-                        R.string.import_remove_multiple_confirmation_title,
-                        pendingRemoval.size
-                    )
+                    if (pendingRemoval.size == 1) {
+                        stringResource(R.string.import_remove_confirmation_title)
+                    } else {
+                        stringResource(
+                            R.string.import_remove_multiple_confirmation_title,
+                            pendingRemoval.size
+                        )
+                    }
                 )
             },
             text = { Text(stringResource(R.string.import_remove_confirmation_message)) },

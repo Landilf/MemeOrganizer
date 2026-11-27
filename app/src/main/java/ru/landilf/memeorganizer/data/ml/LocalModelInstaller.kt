@@ -36,7 +36,10 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
         require(id.matches(Regex("[0-9a-f-]{36}")))
         try {
             TextModelPackage.load(File(directory, id)).also { model ->
-                AppLogger.ml { "model.active tag=${model.releaseTag} sha=${model.modelSha256.take(12)} dim=${model.dimension}" }
+                AppLogger.ml {
+                    "model.active tag=${model.releaseTag} sha=${model.modelSha256.take(12)} " +
+                        "dim=${model.dimension}"
+                }
             }
         } catch (error: Exception) {
             pointer.delete()
@@ -66,7 +69,10 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
         onArchiveReadFinished: () -> Unit
     ): TextModelPackage {
         AppLogger.ml { "model.install.start" }
-        require(expectedArchiveSha256 == null || expectedArchiveSha256.matches(Regex("[0-9a-fA-F]{64}"))) { "Invalid archive SHA-256" }
+        require(
+            expectedArchiveSha256 == null ||
+                expectedArchiveSha256.matches(Regex("[0-9a-fA-F]{64}"))
+        ) { "Invalid archive SHA-256" }
         if (!directory.isDirectory && !directory.mkdirs()) throw IOException("Cannot create model directory")
         val id = UUID.randomUUID().toString()
         val staged = File(directory, id)
@@ -84,7 +90,9 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
                             currentCoroutineContext().ensureActive()
                             val entry = tar.nextEntry ?: break
                             if (entry.isDirectory) continue
-                            require(entry.isFile && !entry.isSymbolicLink && !entry.isLink) { "Unsupported archive entry" }
+                            require(entry.isFile && !entry.isSymbolicLink && !entry.isLink) {
+                                "Unsupported archive entry"
+                            }
                             val parts = entry.name.split('/')
                             require(
                                 parts.size >= 2 &&

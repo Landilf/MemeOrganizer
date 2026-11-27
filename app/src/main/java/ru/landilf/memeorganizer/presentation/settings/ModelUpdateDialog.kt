@@ -24,10 +24,13 @@ fun ModelUpdateDialog(
     val progress = state.progress
     if (progress != null) {
         val fraction = when (progress) {
-            is ModelDownloadProgress.Downloading -> if (progress.totalBytes > 0) (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(
-                0f,
-                1f
-            ) else 0f
+            is ModelDownloadProgress.Downloading -> {
+                if (progress.totalBytes > 0) {
+                    (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+            }
 
             ModelDownloadProgress.Installing -> 1f
         }
@@ -36,7 +39,15 @@ fun ModelUpdateDialog(
             title = { Text(stringResource(R.string.model_update_progress_title)) },
             text = {
                 Column {
-                    Text(stringResource(if (progress is ModelDownloadProgress.Downloading) R.string.model_update_downloading else R.string.model_update_installing))
+                    Text(
+                        stringResource(
+                            if (progress is ModelDownloadProgress.Downloading) {
+                                R.string.model_update_downloading
+                            } else {
+                                R.string.model_update_installing
+                            }
+                        )
+                    )
                     LinearProgressIndicator(
                         progress = { fraction },
                         modifier = Modifier.fillMaxWidth().padding(top = 16.dp)

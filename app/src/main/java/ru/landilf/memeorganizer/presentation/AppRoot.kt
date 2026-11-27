@@ -211,7 +211,10 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                                 SEARCH_CANDIDATE_IDS_KEY,
                                 ArrayList(searchState.results.map { it.meme.id })
                             )
-                        navController.navigate("viewer/${result.meme.id}?searchId=${result.searchId}&rank=${result.rank}&impressionAtMs=${result.impressionAtMs}")
+                        navController.navigate(
+                            "viewer/${result.meme.id}?searchId=${result.searchId}" +
+                                "&rank=${result.rank}&impressionAtMs=${result.impressionAtMs}"
+                        )
                     }
                 )
             }
@@ -324,9 +327,9 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                                 }
                             )
                         )
-                        if (modelStatus == ModelStatus.Installing || modelStatus == ModelStatus.Checking) LinearProgressIndicator(
-                            Modifier.fillMaxWidth()
-                        )
+                        if (modelStatus == ModelStatus.Installing || modelStatus == ModelStatus.Checking) {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
                         Button(
                             onClick = {
                                 modelPicker.launch(
@@ -847,7 +850,11 @@ private fun MainTabsScreen(
                             leadingIcon = { Icon(Icons.Default.PhotoLibrary, null) },
                             onClick = {
                                 menuExpanded = false
-                                galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                                galleryPicker.launch(
+                                    PickVisualMediaRequest(
+                                        ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                                    )
+                                )
                             })
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.library_import_files)) },

@@ -158,11 +158,11 @@ class DeveloperViewModel @Inject constructor(
             }
         }
     }
-
-    private fun DebugExportStatus.isBusy(): Boolean = this in setOf(
-        DebugExportStatus.Exporting,
-        DebugExportStatus.Clearing,
-        DebugExportStatus.Reindexing,
-        DebugExportStatus.TestingFusion
-    )
 }
+
+internal fun DebugExportStatus.isBusy(): Boolean = this in setOf(
+    DebugExportStatus.Exporting,
+    DebugExportStatus.Clearing,
+    DebugExportStatus.Reindexing,
+    DebugExportStatus.TestingFusion
+)

@@ -48,8 +48,14 @@ data class TextModelPackage(
             val actualHash = verifyHash(model, expectedHash)
             val dimension = manifest.getInt("embedding_dimension")
             val maxLength = manifest.getInt("max_sequence_length")
-            require(dimension in 1..8192 && maxLength in 1..4096 && tokenizer.getInt("max_length") == maxLength)
-            require(tokenizer.getString("padding") == "max_length" && tokenizer.getBoolean("truncation")) { "Unsupported tokenizer configuration" }
+            require(
+                dimension in 1..8192 &&
+                    maxLength in 1..4096 &&
+                    tokenizer.getInt("max_length") == maxLength
+            )
+            require(
+                tokenizer.getString("padding") == "max_length" && tokenizer.getBoolean("truncation")
+            ) { "Unsupported tokenizer configuration" }
             val paddingTokenId = tokenizer.getJSONObject("special_token_ids").getLong("pad")
             require(paddingTokenId >= 0)
             val prefixes = manifest.getJSONObject("prefixes")

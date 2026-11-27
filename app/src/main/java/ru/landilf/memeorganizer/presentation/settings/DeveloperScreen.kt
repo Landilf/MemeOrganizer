@@ -3,6 +3,7 @@ package ru.landilf.memeorganizer.presentation.settings
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.annotation.StringRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -49,7 +50,11 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { viewModel.requestReindexAll() }
     val filePicker =
-        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(if (includeMedia) "application/zip" else "application/gzip")) { uri ->
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument(
+                if (includeMedia) "application/zip" else "application/gzip"
+            )
+        ) { uri ->
             if (uri != null) viewModel.export(uri, includeMedia)
         }
     Scaffold(topBar = {
@@ -122,7 +127,13 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
             Button(
                 onClick = {
                     viewModel.clearStatus()
-                    filePicker.launch(if (includeMedia) "meme-organizer-full-debug.zip" else "meme-organizer-events.jsonl.gz")
+                    filePicker.launch(
+                        if (includeMedia) {
+                            "meme-organizer-full-debug.zip"
+                        } else {
+                            "meme-organizer-events.jsonl.gz"
+                        }
+                    )
                 },
                 enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 16.dp)
@@ -155,29 +166,15 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_fusion_smoke_test)) }
             when (status) {
-                DebugExportStatus.Exporting -> LinearProgressIndicator(
+                DebugExportStatus.Exporting, DebugExportStatus.Clearing -> LinearProgressIndicator(
                     Modifier.fillMaxWidth().padding(top = 16.dp)
                 )
 
-                DebugExportStatus.Clearing -> LinearProgressIndicator(
-                    Modifier.fillMaxWidth().padding(top = 16.dp)
+                DebugExportStatus.Reindexing -> DeveloperProgress(R.string.developer_reindexing)
+
+                DebugExportStatus.TestingFusion -> DeveloperProgress(
+                    R.string.developer_fusion_smoke_testing
                 )
-
-                DebugExportStatus.Reindexing -> {
-                    Text(
-                        stringResource(R.string.developer_reindexing),
-                        Modifier.padding(top = 16.dp)
-                    )
-                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
-                }
-
-                DebugExportStatus.TestingFusion -> {
-                    Text(
-                        stringResource(R.string.developer_fusion_smoke_testing),
-                        Modifier.padding(top = 16.dp)
-                    )
-                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
-                }
 
                 DebugExportStatus.ExportSuccess -> Text(
                     stringResource(R.string.developer_export_success),
@@ -237,9 +234,8 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
     }
 }
 
-private fun DebugExportStatus.isBusy(): Boolean = this in setOf(
-    DebugExportStatus.Exporting,
-    DebugExportStatus.Clearing,
-    DebugExportStatus.Reindexing,
-    DebugExportStatus.TestingFusion
-)
+@Composable
+private fun DeveloperProgress(@StringRes messageRes: Int) {
+    Text(stringResource(messageRes), Modifier.padding(top = 16.dp))
+    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+}

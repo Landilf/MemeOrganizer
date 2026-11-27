@@ -42,7 +42,8 @@ class OnnxTextEncoder private constructor(
                                         val elapsedMs =
                                             (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000.0
                                         AppLogger.ml {
-                                            "model.inference tokens=${attentionMask.count { it != 0L }} dim=$embeddingDimension elapsed_ms=%.2f".format(
+                                            "model.inference tokens=${attentionMask.count { it != 0L }} " +
+                                                "dim=$embeddingDimension elapsed_ms=%.2f".format(
                                                 java.util.Locale.ROOT,
                                                 elapsedMs
                                             )

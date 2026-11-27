@@ -97,7 +97,10 @@ class ImportViewModel @Inject constructor(
                             imported++
                             progress.latestSource?.identifier?.let { source ->
                                 val details = _state.value.detailsBySource[source]
-                                if (details != null && (details.description.isNotBlank() || details.tags.isNotEmpty())) {
+                                if (
+                                    details != null &&
+                                        (details.description.isNotBlank() || details.tags.isNotEmpty())
+                                ) {
                                     saveMemeDetails(result.meme.id, details)
                                 }
                                 mediaIndexingRepository.enqueue(result.meme.id)
