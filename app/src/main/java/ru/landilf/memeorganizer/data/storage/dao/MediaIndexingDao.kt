@@ -4,10 +4,14 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingEntity
 
 @Dao
 interface MediaIndexingDao {
+    @Query("SELECT * FROM media_indexing")
+    fun observeAll(): Flow<List<MediaIndexingEntity>>
+
     @Query("SELECT * FROM media_indexing WHERE memeId = :memeId")
     suspend fun getByMemeId(memeId: Long): MediaIndexingEntity?
 

@@ -39,6 +39,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.domain.model.meme.Meme
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
+import ru.landilf.memeorganizer.presentation.common.MediaIndexingBadge
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
 import java.io.File
 
@@ -47,6 +49,7 @@ import java.io.File
 fun AlbumContentsScreen(
     title: String,
     memes: List<Meme>,
+    indexingStatuses: Map<Long, MediaIndexingStatus>,
     onBack: () -> Unit,
     onMemeClick: (Meme) -> Unit,
     onRemoveMemes: ((Set<Long>) -> Unit)? = null
@@ -132,6 +135,10 @@ fun AlbumContentsScreen(
                             Uri.fromFile(File(context.filesDir, "memes/${meme.storedFileName}")),
                             meme.mimeType,
                             Modifier.fillMaxSize()
+                        )
+                        MediaIndexingBadge(
+                            status = indexingStatuses[meme.id],
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp)
                         )
                         if (meme.id in selected) {
                             Checkbox(

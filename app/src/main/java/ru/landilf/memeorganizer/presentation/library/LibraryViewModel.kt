@@ -77,6 +77,8 @@ class LibraryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val tags = detailsRepository.observeTags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val indexingStatuses = mediaIndexingRepository.observeStatuses()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
     private val _edit = MutableStateFlow<EditState?>(null)
     val edit = _edit.asStateFlow()
     private val _deleteError = MutableStateFlow(false)

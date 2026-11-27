@@ -62,6 +62,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
+import ru.landilf.memeorganizer.presentation.common.MediaIndexingBadge
 import ru.landilf.memeorganizer.presentation.importing.ImportSummary
 import ru.landilf.memeorganizer.presentation.importing.asText
 import ru.landilf.memeorganizer.presentation.importing.ImportScreen
@@ -85,6 +86,7 @@ import ru.landilf.memeorganizer.presentation.search.SearchViewModel
 import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeMediaType
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
 import ru.landilf.memeorganizer.presentation.library.AlbumNameError
 import ru.landilf.memeorganizer.presentation.library.AlbumNameDialog
 import ru.landilf.memeorganizer.presentation.library.AlbumPickerDialog
@@ -174,6 +176,7 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                 val appSettingsViewModel: AppSettingsViewModel = hiltViewModel()
                 val memes by libraryViewModel.memes.collectAsStateWithLifecycle()
                 val albums by libraryViewModel.albums.collectAsStateWithLifecycle()
+                val indexingStatuses by libraryViewModel.indexingStatuses.collectAsStateWithLifecycle()
                 val appSettings by appSettingsViewModel.settings.collectAsStateWithLifecycle()
                 MainTabsScreen(
                     onSettingsClick = { navController.navigate("settings") },
@@ -185,6 +188,7 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                     },
                     memes = memes,
                     albums = albums,
+                    indexingStatuses = indexingStatuses,
                     appSettings = appSettings,
                     libraryViewModel = libraryViewModel,
                     onLibrarySortSelected = appSettingsViewModel::setLibrarySort,
@@ -436,6 +440,7 @@ private fun MainTabsScreen(
     onFilesSelected: (List<String>) -> Unit,
     memes: List<Meme>,
     albums: List<Album>,
+    indexingStatuses: Map<Long, MediaIndexingStatus>,
     appSettings: AppSettings,
     libraryViewModel: LibraryViewModel,
     onLibrarySortSelected: (LibrarySort) -> Unit,
@@ -523,6 +528,7 @@ private fun MainTabsScreen(
         AlbumContentsScreen(
             title = openedAlbum.name,
             memes = albumMemes,
+            indexingStatuses = indexingStatuses,
             onBack = {
                 openedAlbumId = null
                 openedFromAlbum = false
@@ -542,6 +548,7 @@ private fun MainTabsScreen(
         AlbumContentsScreen(
             title = stringResource(openedSystemAlbum!!.title),
             memes = systemAlbumMemes,
+            indexingStatuses = indexingStatuses,
             onBack = {
                 openedSystemAlbum = null
                 openedFromAlbum = false
@@ -954,6 +961,10 @@ private fun MainTabsScreen(
                                         "memes/${meme.storedFileName}"
                                     )
                                 ), meme.mimeType, Modifier.fillMaxSize()
+                            )
+                            MediaIndexingBadge(
+                                status = indexingStatuses[meme.id],
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp)
                             )
                             if (meme.id in selected) Checkbox(
                                 true,

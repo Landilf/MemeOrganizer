@@ -5,5 +5,11 @@ enum class MediaIndexingStatus(val storageValue: String) {
     Pending("pending"),
     Partial("partial"),
     Done("done"),
-    Failed("failed")
+    Failed("failed");
+
+    companion object {
+        fun fromStorageValue(value: String): MediaIndexingStatus? = entries.firstOrNull {
+            it.storageValue == value
+        }
+    }
 }

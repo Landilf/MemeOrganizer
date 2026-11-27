@@ -28,6 +28,9 @@
     <string name="library_sort_added_at">По дате добавления</string>
     <string name="library_sort_usage_count">По частоте использования</string>
     <string name="library_sort_media_type">По типу файла</string>
+    <string name="indexing_status_pending">Ожидает</string>
+    <string name="indexing_status_partial">Текст готов</string>
+    <string name="indexing_status_failed">Ошибка</string>
 
     <string name="albums_empty">Здесь будут ваши альбомы</string>
     <string name="albums_create">Создать альбом</string>

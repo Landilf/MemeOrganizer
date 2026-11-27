@@ -8,6 +8,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,6 +46,15 @@ class MediaIndexingRepositoryImpl @Inject constructor(
             enqueue(memeId)
         }
     }
+
+    override fun observeStatuses(): Flow<Map<Long, MediaIndexingStatus>> =
+        indexingDao.observeAll().map { entries ->
+            entries.mapNotNull { entry ->
+                MediaIndexingStatus.fromStorageValue(entry.status)?.let { status ->
+                    entry.memeId to status
+                }
+            }.toMap()
+        }
 
     private fun enqueueWork(memeId: Long) {
         WorkManager.getInstance(context).enqueueUniqueWork(
