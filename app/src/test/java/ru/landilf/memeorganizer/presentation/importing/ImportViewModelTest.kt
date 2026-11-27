@@ -17,6 +17,7 @@ import ru.landilf.memeorganizer.domain.model.importing.ImportFailure
 import ru.landilf.memeorganizer.domain.model.importing.ImportResult
 import ru.landilf.memeorganizer.domain.model.importing.ImportSource
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingRun
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.model.meme.TagSuggestion
@@ -44,10 +45,12 @@ class ImportViewModelTest {
     }
     private val mediaIndexingRepository = object : MediaIndexingRepository {
         override suspend fun enqueue(memeId: Long) = Unit
+        override suspend fun enqueueAll(memeIds: List<Long>) = memeIds.size
         override suspend fun resumePending() = Unit
         override suspend fun retryFailed() = 0
         override suspend fun reprocessAll() = 0
         override fun observeStatuses() = flowOf(emptyMap<Long, MediaIndexingStatus>())
+        override fun observeRuns() = flowOf(emptyList<MediaIndexingRun>())
     }
 
     private fun createViewModel(savedState: SavedStateHandle) = ImportViewModel(

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
@@ -88,11 +89,13 @@ import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeMediaType
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingProgress
 import ru.landilf.memeorganizer.presentation.library.AlbumNameError
 import ru.landilf.memeorganizer.presentation.library.AlbumNameDialog
 import ru.landilf.memeorganizer.presentation.library.AlbumPickerDialog
 import ru.landilf.memeorganizer.presentation.library.DeleteMemesConfirmationDialog
 import ru.landilf.memeorganizer.presentation.album.AlbumContentsScreen
+import ru.landilf.memeorganizer.presentation.indexing.IndexingHistoryScreen
 import ru.landilf.memeorganizer.domain.model.settings.AppSettings
 import ru.landilf.memeorganizer.domain.model.settings.LibrarySort
 import ru.landilf.memeorganizer.domain.model.settings.SortDirection
@@ -180,10 +183,12 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                 val indexingStatuses by libraryViewModel.indexingStatuses.collectAsStateWithLifecycle()
                 val manualIndexingInProgress by libraryViewModel.manualIndexingInProgress
                     .collectAsStateWithLifecycle()
+                val indexingProgress by libraryViewModel.indexingProgress.collectAsStateWithLifecycle()
                 val appSettings by appSettingsViewModel.settings.collectAsStateWithLifecycle()
                 MainTabsScreen(
                     onSettingsClick = { navController.navigate("settings") },
                     onSearchClick = { navController.navigate("search") },
+                    onIndexingHistoryClick = { navController.navigate("indexingHistory") },
                     onFilesSelected = { sources ->
                         importViewModel.setSources(sources); navController.navigate(
                         "import"
@@ -193,12 +198,23 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                     albums = albums,
                     indexingStatuses = indexingStatuses,
                     manualIndexingInProgress = manualIndexingInProgress,
+                    indexingProgress = indexingProgress,
                     appSettings = appSettings,
                     libraryViewModel = libraryViewModel,
                     onLibrarySortSelected = appSettingsViewModel::setLibrarySort,
                     onLibrarySortDirectionSelected = appSettingsViewModel::setLibrarySortDirection,
                     summary = importState.summary,
                     onSummaryShown = importViewModel::clearSummary
+                )
+            }
+            composable("indexingHistory") {
+                val libraryViewModel: LibraryViewModel = hiltViewModel()
+                val runs by libraryViewModel.indexingRuns.collectAsStateWithLifecycle()
+                val progress by libraryViewModel.indexingProgress.collectAsStateWithLifecycle()
+                IndexingHistoryScreen(
+                    progress = progress,
+                    runs = runs,
+                    onBack = { navController.popBackStack() }
                 )
             }
             composable("search") {
@@ -441,11 +457,13 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
 private fun MainTabsScreen(
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
+    onIndexingHistoryClick: () -> Unit,
     onFilesSelected: (List<String>) -> Unit,
     memes: List<Meme>,
     albums: List<Album>,
     indexingStatuses: Map<Long, MediaIndexingStatus>,
     manualIndexingInProgress: Boolean,
+    indexingProgress: MediaIndexingProgress?,
     appSettings: AppSettings,
     libraryViewModel: LibraryViewModel,
     onLibrarySortSelected: (LibrarySort) -> Unit,
@@ -842,14 +860,30 @@ private fun MainTabsScreen(
                             }
                         }
                     }
-                    IconButton(
-                        onClick = { manualIndexingOnlyFailed = failedIndexingCount > 0 },
-                        enabled = memes.isNotEmpty() && !manualIndexingInProgress
-                    ) {
+                    IconButton(onClick = onIndexingHistoryClick) {
                         Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = stringResource(R.string.library_reprocess)
+                            Icons.Default.History,
+                            contentDescription = stringResource(R.string.indexing_history_open)
                         )
+                    }
+                    Box(contentAlignment = Alignment.Center) {
+                        IconButton(
+                            onClick = { manualIndexingOnlyFailed = failedIndexingCount > 0 },
+                            enabled = memes.isNotEmpty() &&
+                                !manualIndexingInProgress && indexingProgress == null
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.library_reprocess)
+                            )
+                        }
+                        indexingProgress?.let { progress ->
+                            CircularProgressIndicator(
+                                progress = { progress.fraction },
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
                     }
                     IconButton(onClick = onSearchClick) {
                         Icon(

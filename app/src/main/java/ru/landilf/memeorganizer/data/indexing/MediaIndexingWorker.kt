@@ -14,8 +14,8 @@ import ru.landilf.memeorganizer.data.device.BatteryStateChecker
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
+import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingRunDao
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
-import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingEntity
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 
@@ -25,46 +25,74 @@ class MediaIndexingWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val memeId = inputData.getLong(MEME_ID_KEY, INVALID_MEME_ID)
-        if (memeId == INVALID_MEME_ID) return Result.failure()
+        val runId = inputData.getLong(RUN_ID_KEY, INVALID_RUN_ID)
+        if (memeId == INVALID_MEME_ID || runId == INVALID_RUN_ID) return Result.failure()
         val dependencies = EntryPointAccessors.fromApplication(
             applicationContext,
             MediaIndexingWorkerEntryPoint::class.java
         )
         val memeDao = dependencies.memeDao()
         val indexingDao = dependencies.indexingDao()
+        val indexingRunDao = dependencies.indexingRunDao()
         if (memeDao.getById(memeId) == null) {
             indexingDao.deleteByMemeId(memeId)
             return Result.success()
         }
+        val current = indexingDao.getByMemeId(memeId) ?: return Result.success()
+        if (current.runId != runId) return Result.success()
         if (dependencies.modelInstaller().activePackage() == null) {
             AppLogger.ml { "media_indexing.waiting_for_model meme_id=$memeId" }
             return Result.success()
         }
-        val wasWaitingForBattery = indexingDao.getByMemeId(memeId)?.lastError ==
+        val wasWaitingForBattery = current.lastError ==
             MediaIndexingRepositoryImpl.BATTERY_LOW_REASON
         if (wasWaitingForBattery) dependencies.indexingNotifier().resumed()
+        val startedAtMillis = System.currentTimeMillis()
+        indexingDao.upsert(
+            current.copy(
+                status = MediaIndexingStatus.Running.storageValue,
+                lastError = null,
+                updatedAtMillis = startedAtMillis,
+                processingStartedAtMillis = startedAtMillis
+            )
+        )
         return try {
             dependencies.searchRepository().indexMeme(memeId)
+            if (indexingDao.getByMemeId(memeId)?.runId != runId) return Result.success()
+            val finishedAtMillis = System.currentTimeMillis()
             indexingDao.upsert(
-                state(
-                    memeId = memeId,
-                    status = MediaIndexingStatus.Partial,
+                current.copy(
+                    status = MediaIndexingStatus.Partial.storageValue,
                     attemptCount = runAttemptCount,
-                    lastError = null
+                    lastError = null,
+                    updatedAtMillis = finishedAtMillis,
+                    processingStartedAtMillis = null
                 )
             )
+            indexingRunDao.recordTerminalResult(
+                runId = runId,
+                completedIncrement = 1,
+                failedIncrement = 0,
+                durationMillis = finishedAtMillis - startedAtMillis,
+                finishedAtMillis = finishedAtMillis
+            )
+            indexingRunDao.pruneFinished(HISTORY_LIMIT)
             AppLogger.ml { "media_indexing.partial meme_id=$memeId" }
             dependencies.indexingNotifier().completed()
             Result.success()
         } catch (error: CancellationException) {
-            if (dependencies.batteryStateChecker().needsHeavyWorkConfirmation()) {
+            if (
+                indexingDao.getByMemeId(memeId)?.runId == runId &&
+                dependencies.batteryStateChecker().needsHeavyWorkConfirmation()
+            ) {
                 withContext<Unit>(NonCancellable) {
                     indexingDao.upsert(
-                        state(
-                            memeId = memeId,
-                            status = MediaIndexingStatus.Pending,
+                        current.copy(
+                            status = MediaIndexingStatus.Pending.storageValue,
                             attemptCount = runAttemptCount,
-                            lastError = MediaIndexingRepositoryImpl.BATTERY_LOW_REASON
+                            lastError = MediaIndexingRepositoryImpl.BATTERY_LOW_REASON,
+                            updatedAtMillis = System.currentTimeMillis(),
+                            processingStartedAtMillis = null
                         )
                     )
                 }
@@ -72,39 +100,46 @@ class MediaIndexingWorker(
             }
             throw error
         } catch (error: Exception) {
+            if (indexingDao.getByMemeId(memeId)?.runId != runId) return Result.success()
             val attempts = runAttemptCount + 1
             val finalFailure = attempts >= MAX_ATTEMPTS
+            val finishedAtMillis = System.currentTimeMillis()
             indexingDao.upsert(
-                state(
-                    memeId = memeId,
-                    status = if (finalFailure) MediaIndexingStatus.Failed else MediaIndexingStatus.Pending,
+                current.copy(
+                    status = if (finalFailure) {
+                        MediaIndexingStatus.Failed.storageValue
+                    } else {
+                        MediaIndexingStatus.Pending.storageValue
+                    },
                     attemptCount = attempts,
-                    lastError = error.javaClass.simpleName
+                    lastError = error.javaClass.simpleName,
+                    updatedAtMillis = finishedAtMillis,
+                    processingStartedAtMillis = null
                 )
             )
+            if (finalFailure) {
+                indexingRunDao.recordTerminalResult(
+                    runId = runId,
+                    completedIncrement = 0,
+                    failedIncrement = 1,
+                    durationMillis = finishedAtMillis - startedAtMillis,
+                    finishedAtMillis = finishedAtMillis
+                )
+                indexingRunDao.pruneFinished(HISTORY_LIMIT)
+            }
             AppLogger.mlError(error) { "media_indexing.failed meme_id=$memeId attempts=$attempts" }
             if (finalFailure) dependencies.indexingNotifier().failed()
             if (finalFailure) Result.failure() else Result.retry()
         }
     }
 
-    private fun state(
-        memeId: Long,
-        status: MediaIndexingStatus,
-        attemptCount: Int,
-        lastError: String?
-    ) = MediaIndexingEntity(
-        memeId = memeId,
-        status = status.storageValue,
-        attemptCount = attemptCount,
-        lastError = lastError,
-        updatedAtMillis = System.currentTimeMillis()
-    )
-
     companion object {
         const val MEME_ID_KEY = "meme_id"
+        const val RUN_ID_KEY = "run_id"
         private const val INVALID_MEME_ID = -1L
+        private const val INVALID_RUN_ID = -1L
         private const val MAX_ATTEMPTS = 3
+        private const val HISTORY_LIMIT = 20
     }
 }
 
@@ -113,6 +148,7 @@ class MediaIndexingWorker(
 interface MediaIndexingWorkerEntryPoint {
     fun memeDao(): MemeDao
     fun indexingDao(): MediaIndexingDao
+    fun indexingRunDao(): MediaIndexingRunDao
     fun modelInstaller(): LocalModelInstaller
     fun searchRepository(): MemeSearchRepository
     fun batteryStateChecker(): BatteryStateChecker

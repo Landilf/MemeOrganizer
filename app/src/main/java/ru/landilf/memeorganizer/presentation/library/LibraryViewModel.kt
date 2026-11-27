@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -18,6 +19,7 @@ import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.core.logging.SearchActionLogWriter
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingProgress
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeExportRepository
 import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
@@ -79,6 +81,11 @@ class LibraryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val indexingStatuses = mediaIndexingRepository.observeStatuses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    val indexingRuns = mediaIndexingRepository.observeRuns()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val indexingProgress = indexingRuns.map { runs ->
+        MediaIndexingProgress.from(runs.filter { it.isActive })
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     private val _manualIndexingInProgress = MutableStateFlow(false)
     val manualIndexingInProgress = _manualIndexingInProgress.asStateFlow()
     private val _edit = MutableStateFlow<EditState?>(null)

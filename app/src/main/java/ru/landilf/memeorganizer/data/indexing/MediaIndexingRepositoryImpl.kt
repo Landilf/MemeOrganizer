@@ -17,51 +17,69 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
+import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingRunDao
 import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingEntity
+import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingRunEntity
 import ru.landilf.memeorganizer.data.device.BatteryStateChecker
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingRun
 import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 
 @Singleton
 class MediaIndexingRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val indexingDao: MediaIndexingDao,
+    private val indexingRunDao: MediaIndexingRunDao,
     private val memeDao: MemeDao,
     private val batteryStateChecker: BatteryStateChecker,
     private val indexingNotifier: IndexingNotifier
 ) : MediaIndexingRepository {
     override suspend fun enqueue(memeId: Long) {
-        schedule(listOf(memeId))
+        scheduleNewRun(listOf(memeId))
     }
+
+    override suspend fun enqueueAll(memeIds: List<Long>): Int = scheduleNewRun(memeIds)
 
     override suspend fun resumePending() {
-        schedule(indexingDao.getMemeIdsByStatus(MediaIndexingStatus.Pending.storageValue))
+        val pending = indexingDao.getByStatus(MediaIndexingStatus.Pending.storageValue)
+        pending.filter { it.runId != null }.forEach { item ->
+            enqueueWork(item.memeId, requireNotNull(item.runId))
+        }
+        scheduleNewRun(pending.filter { it.runId == null }.map(MediaIndexingEntity::memeId))
     }
 
-    override suspend fun retryFailed(): Int = schedule(
+    override suspend fun retryFailed(): Int = scheduleNewRun(
         indexingDao.getMemeIdsByStatus(MediaIndexingStatus.Failed.storageValue)
     )
 
-    override suspend fun reprocessAll(): Int = schedule(memeDao.getAll().map { it.id })
+    override suspend fun reprocessAll(): Int = scheduleNewRun(memeDao.getAll().map { it.id })
 
-    private suspend fun schedule(memeIds: List<Long>): Int = withContext(Dispatchers.IO) {
-        if (memeIds.isEmpty()) return@withContext 0
+    private suspend fun scheduleNewRun(memeIds: List<Long>): Int = withContext(Dispatchers.IO) {
+        val distinctIds = memeIds.distinct()
+        if (distinctIds.isEmpty()) return@withContext 0
         val waitingForBattery = batteryStateChecker.needsHeavyWorkConfirmation()
         val updatedAtMillis = System.currentTimeMillis()
-        memeIds.forEach { memeId ->
+        val runId = indexingRunDao.insert(
+            MediaIndexingRunEntity(
+                startedAtMillis = updatedAtMillis,
+                totalCount = distinctIds.size
+            )
+        )
+        distinctIds.forEach { memeId ->
             indexingDao.upsert(
                 MediaIndexingEntity(
                     memeId = memeId,
                     status = MediaIndexingStatus.Pending.storageValue,
                     attemptCount = 0,
                     lastError = if (waitingForBattery) BATTERY_LOW_REASON else null,
-                    updatedAtMillis = updatedAtMillis
+                    updatedAtMillis = updatedAtMillis,
+                    runId = runId
                 )
             )
         }
         if (waitingForBattery) indexingNotifier.waitingForBattery()
-        memeIds.forEach(::enqueueWork)
-        memeIds.size
+        distinctIds.forEach { memeId -> enqueueWork(memeId, runId) }
+        distinctIds.size
     }
 
     override fun observeStatuses(): Flow<Map<Long, MediaIndexingStatus>> =
@@ -73,12 +91,32 @@ class MediaIndexingRepositoryImpl @Inject constructor(
             }.toMap()
         }
 
-    private fun enqueueWork(memeId: Long) {
+    override fun observeRuns(): Flow<List<MediaIndexingRun>> =
+        indexingRunDao.observeRecent(HISTORY_LIMIT).map { runs ->
+            runs.map { run ->
+                MediaIndexingRun(
+                    id = run.id,
+                    startedAtMillis = run.startedAtMillis,
+                    totalCount = run.totalCount,
+                    completedCount = run.completedCount,
+                    failedCount = run.failedCount,
+                    totalDurationMillis = run.totalDurationMillis,
+                    finishedAtMillis = run.finishedAtMillis
+                )
+            }
+        }
+
+    private fun enqueueWork(memeId: Long, runId: Long) {
         WorkManager.getInstance(context).enqueueUniqueWork(
             workName(memeId),
             ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<MediaIndexingWorker>()
-                .setInputData(workDataOf(MediaIndexingWorker.MEME_ID_KEY to memeId))
+                .setInputData(
+                    workDataOf(
+                        MediaIndexingWorker.MEME_ID_KEY to memeId,
+                        MediaIndexingWorker.RUN_ID_KEY to runId
+                    )
+                )
                 .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
                 .build()
@@ -89,5 +127,6 @@ class MediaIndexingRepositoryImpl @Inject constructor(
         fun workName(memeId: Long) = "media_indexing_$memeId"
         const val BATTERY_LOW_REASON = "battery_low"
         private const val BACKOFF_SECONDS = 30L
+        private const val HISTORY_LIMIT = 20
     }
 }

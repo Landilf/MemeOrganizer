@@ -29,6 +29,13 @@ fun MediaIndexingBadge(status: MediaIndexingStatus?, modifier: Modifier = Modifi
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
         )
 
+        MediaIndexingStatus.Running -> IndexingBadgeAppearance(
+            label = R.string.indexing_status_running,
+            icon = Icons.Default.Schedule,
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+
         MediaIndexingStatus.Partial -> IndexingBadgeAppearance(
             label = R.string.indexing_status_partial,
             icon = Icons.Default.CheckCircle,

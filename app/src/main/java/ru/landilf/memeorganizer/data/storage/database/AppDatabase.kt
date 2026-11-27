@@ -13,6 +13,8 @@ import ru.landilf.memeorganizer.data.storage.entities.search.ExtractedTextChunkE
 import ru.landilf.memeorganizer.data.storage.dao.ExtractedTextChunkDao
 import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingEntity
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
+import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingRunEntity
+import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingRunDao
 import ru.landilf.memeorganizer.data.storage.entities.logging.LightLogEventEntity
 import ru.landilf.memeorganizer.data.storage.dao.LightLogDao
 import ru.landilf.memeorganizer.data.storage.dao.AlbumDao
@@ -27,11 +29,12 @@ import ru.landilf.memeorganizer.data.storage.entities.album.AlbumMemeEntity
         TextEmbeddingEntity::class,
         ExtractedTextChunkEntity::class,
         MediaIndexingEntity::class,
+        MediaIndexingRunEntity::class,
         LightLogEventEntity::class,
         AlbumEntity::class,
         AlbumMemeEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -40,6 +43,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun textEmbeddingDao(): TextEmbeddingDao
     abstract fun extractedTextChunkDao(): ExtractedTextChunkDao
     abstract fun mediaIndexingDao(): MediaIndexingDao
+    abstract fun mediaIndexingRunDao(): MediaIndexingRunDao
     abstract fun lightLogDao(): LightLogDao
     abstract fun albumDao(): AlbumDao
 }

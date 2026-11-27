@@ -14,6 +14,7 @@ import ru.landilf.memeorganizer.data.storage.dao.AlbumDao
 import ru.landilf.memeorganizer.data.storage.dao.TagDao
 import ru.landilf.memeorganizer.data.storage.dao.ExtractedTextChunkDao
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
+import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingRunDao
 import ru.landilf.memeorganizer.data.storage.database.AppDatabase
 import ru.landilf.memeorganizer.data.storage.database.DatabaseMigrations
 import javax.inject.Singleton
@@ -35,7 +36,8 @@ object DatabaseModule {
                 DatabaseMigrations.MIGRATION_7_8,
                 DatabaseMigrations.MIGRATION_8_9,
                 DatabaseMigrations.MIGRATION_9_10,
-                DatabaseMigrations.MIGRATION_10_11
+                DatabaseMigrations.MIGRATION_10_11,
+                DatabaseMigrations.MIGRATION_11_12
             )
             .build()
 
@@ -52,6 +54,10 @@ object DatabaseModule {
 
     @Provides
     fun provideMediaIndexingDao(database: AppDatabase): MediaIndexingDao = database.mediaIndexingDao()
+
+    @Provides
+    fun provideMediaIndexingRunDao(database: AppDatabase): MediaIndexingRunDao =
+        database.mediaIndexingRunDao()
 
     @Provides
     fun provideLightLogDao(database: AppDatabase): LightLogDao = database.lightLogDao()

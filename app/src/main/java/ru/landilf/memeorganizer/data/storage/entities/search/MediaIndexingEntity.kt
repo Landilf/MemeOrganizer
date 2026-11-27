@@ -22,5 +22,7 @@ data class MediaIndexingEntity(
     val status: String,
     val attemptCount: Int,
     val lastError: String?,
-    val updatedAtMillis: Long
+    val updatedAtMillis: Long,
+    val runId: Long? = null,
+    val processingStartedAtMillis: Long? = null
 )

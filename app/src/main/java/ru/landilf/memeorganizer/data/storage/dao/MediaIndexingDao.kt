@@ -21,6 +21,9 @@ interface MediaIndexingDao {
     @Query("SELECT memeId FROM media_indexing WHERE status = :status ORDER BY updatedAtMillis ASC")
     suspend fun getMemeIdsByStatus(status: String): List<Long>
 
+    @Query("SELECT * FROM media_indexing WHERE status = :status ORDER BY updatedAtMillis ASC")
+    suspend fun getByStatus(status: String): List<MediaIndexingEntity>
+
     @Query("DELETE FROM media_indexing WHERE memeId = :memeId")
     suspend fun deleteByMemeId(memeId: Long)
 }

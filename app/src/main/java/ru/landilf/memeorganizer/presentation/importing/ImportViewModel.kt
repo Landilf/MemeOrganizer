@@ -88,7 +88,15 @@ class ImportViewModel @Inject constructor(
             var imported = 0
             var duplicates = 0
             var failed = 0
+            val importedMemeIds = mutableListOf<Long>()
+            var indexingQueued = false
             val remaining = sources.map { it.identifier }.toMutableList()
+            suspend fun enqueueImportedMemes() {
+                if (!indexingQueued && importedMemeIds.isNotEmpty()) {
+                    mediaIndexingRepository.enqueueAll(importedMemeIds)
+                    indexingQueued = true
+                }
+            }
             try {
                 importMemes(sources).collect { progress ->
                     val result = progress.latestResult
@@ -103,7 +111,7 @@ class ImportViewModel @Inject constructor(
                                 ) {
                                     saveMemeDetails(result.meme.id, details)
                                 }
-                                mediaIndexingRepository.enqueue(result.meme.id)
+                                importedMemeIds += result.meme.id
                                 remaining.remove(source)
                             }
                         }
@@ -117,6 +125,7 @@ class ImportViewModel @Inject constructor(
                     }
                     _state.update { it.copy(completed = progress.completed) }
                 }
+                enqueueImportedMemes()
                 savedStateHandle["sources"] = ArrayList(remaining)
                 _state.update {
                     it.copy(
@@ -129,6 +138,7 @@ class ImportViewModel @Inject constructor(
             } catch (exception: kotlinx.coroutines.CancellationException) {
                 throw exception
             } catch (_: Exception) {
+                runCatching { enqueueImportedMemes() }
                 savedStateHandle["sources"] = ArrayList(remaining)
                 _state.update {
                     it.copy(

@@ -29,6 +29,7 @@
     <string name="library_sort_usage_count">По частоте использования</string>
     <string name="library_sort_media_type">По типу файла</string>
     <string name="indexing_status_pending">Ожидает</string>
+    <string name="indexing_status_running">Обрабатывается</string>
     <string name="indexing_status_partial">Текст готов</string>
     <string name="indexing_status_failed">Ошибка</string>
     <string name="library_reprocess">Повторить обработку</string>
@@ -38,6 +39,22 @@
     <string name="library_reprocess_all_message">Будут повторно обработаны все файлы: %1$d. Это может занять время и увеличить расход заряда.</string>
     <string name="library_reprocess_confirm">Запустить</string>
     <string name="library_indexing_scheduled">Обработка добавлена в очередь: %1$d.</string>
+    <string name="indexing_history_open">История обработки</string>
+    <string name="indexing_history_title">Обработка мемов</string>
+    <string name="indexing_history_empty">Запусков обработки пока не было.</string>
+    <string name="indexing_progress_title">Обработано: %1$d / %2$d</string>
+    <string name="indexing_progress_elapsed">Прошло: %1$s</string>
+    <string name="indexing_progress_remaining">Осталось примерно: %1$s</string>
+    <string name="indexing_progress_estimating">Оценка времени появится после первой завершённой задачи.</string>
+    <string name="indexing_progress_failed">Ошибок: %1$d</string>
+    <string name="indexing_history_running">Выполняется</string>
+    <string name="indexing_history_completed">Завершено</string>
+    <string name="indexing_history_started">Начало: %1$s</string>
+    <string name="indexing_history_result">Обработано: %1$d / %2$d, ошибок: %3$d</string>
+    <string name="indexing_history_duration">Длительность: %1$s</string>
+    <string name="indexing_duration_seconds">%1$d сек.</string>
+    <string name="indexing_duration_minutes_seconds">%1$d мин. %2$d сек.</string>
+    <string name="indexing_duration_hours_minutes">%1$d ч. %2$d мин.</string>
 
     <string name="albums_empty">Здесь будут ваши альбомы</string>
     <string name="albums_create">Создать альбом</string>
