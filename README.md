@@ -97,12 +97,16 @@ GitHub Actions запускает unit-тесты и собирает debug APK 
 `main`, а также для pull request в `main`. Успешная сборка APK прикладывается к
 запуску workflow как артефакт.
 
+Push тега `v*` запускает отдельный workflow signed release APK. Настройка
+keystore и GitHub Secrets описана в [docs/releasing.md](docs/releasing.md).
+
 ## Документация
 
 - [Техническое задание](docs/ТЗ.md)
 - [Формат резервной копии](docs/library_backup_format_v1.md)
 - [Контракт интеграции ML v0.2](docs/ml_android_contract_v0.2.md)
 - [Формат Light Log](docs/ml_light_log_schema_v1.md)
+- [Публикация signed APK](docs/releasing.md)
 
 ## В планах
 
