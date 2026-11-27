@@ -183,6 +183,11 @@
     <string name="developer_reindex_success">Переиндексация завершена: %1$d мем(ов) обработано.</string>
     <string name="developer_reindex_model_unavailable">Установите пакет модели, чтобы запустить переиндексацию.</string>
     <string name="developer_reindex_error">Не удалось переиндексировать библиотеку.</string>
+    <string name="developer_fusion_smoke_test">Проверить fusion-модель</string>
+    <string name="developer_fusion_smoke_testing">Проверка fusion-модели…</string>
+    <string name="developer_fusion_smoke_success">Fusion-модель прошла Smoke Test Pack.</string>
+    <string name="developer_fusion_smoke_unavailable">Установите мультимодальный пакет модели, чтобы выполнить проверку.</string>
+    <string name="developer_fusion_smoke_error">Fusion-модель не прошла проверку.</string>
     <string name="search_open">Поиск</string>
     <string name="search_title">Поиск</string>
     <string name="search_query">Найдите мем по описанию или тегам</string>

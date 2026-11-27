@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.core.logging.DebugLogExporter
+import ru.landilf.memeorganizer.data.ml.FusionSmokeTestResult
+import ru.landilf.memeorganizer.data.ml.FusionSmokeTestRunner
+import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 import javax.inject.Inject
 
@@ -25,13 +28,19 @@ enum class DebugExportStatus {
     Reindexing,
     ReindexSuccess,
     ReindexModelUnavailable,
-    ReindexError
+    ReindexError,
+    TestingFusion,
+    FusionTestSuccess,
+    FusionTestUnavailable,
+    FusionTestError
 }
 
 @HiltViewModel
 class DeveloperViewModel @Inject constructor(
     private val exporter: DebugLogExporter,
-    private val searchRepository: MemeSearchRepository
+    private val searchRepository: MemeSearchRepository,
+    private val modelInstaller: LocalModelInstaller,
+    private val fusionSmokeTestRunner: FusionSmokeTestRunner
 ) : ViewModel() {
     private val _status = MutableStateFlow(DebugExportStatus.Idle)
     val status = _status.asStateFlow()
@@ -97,9 +106,37 @@ class DeveloperViewModel @Inject constructor(
         }
     }
 
+    fun runFusionSmokeTest() {
+        if (_status.value.isBusy()) return
+        _status.value = DebugExportStatus.TestingFusion
+        viewModelScope.launch {
+            try {
+                val modelPackage = modelInstaller.activePackage()
+                if (modelPackage == null) {
+                    _status.value = DebugExportStatus.FusionTestUnavailable
+                    return@launch
+                }
+                _status.value = when (val result = fusionSmokeTestRunner.run(modelPackage)) {
+                    is FusionSmokeTestResult.Passed -> {
+                        AppLogger.ml { "fusion.smoke_test.passed count=${result.testCount}" }
+                        DebugExportStatus.FusionTestSuccess
+                    }
+
+                    FusionSmokeTestResult.Unavailable -> DebugExportStatus.FusionTestUnavailable
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppLogger.mlError(error) { "fusion.smoke_test.failed" }
+                _status.value = DebugExportStatus.FusionTestError
+            }
+        }
+    }
+
     private fun DebugExportStatus.isBusy(): Boolean = this in setOf(
         DebugExportStatus.Exporting,
         DebugExportStatus.Clearing,
-        DebugExportStatus.Reindexing
+        DebugExportStatus.Reindexing,
+        DebugExportStatus.TestingFusion
     )
 }

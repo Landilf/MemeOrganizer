@@ -110,6 +110,11 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_reindex_all)) }
+            OutlinedButton(
+                onClick = viewModel::runFusionSmokeTest,
+                enabled = !status.isBusy(),
+                modifier = Modifier.padding(top = 12.dp)
+            ) { Text(stringResource(R.string.developer_fusion_smoke_test)) }
             when (status) {
                 DebugExportStatus.Exporting -> LinearProgressIndicator(
                     Modifier.fillMaxWidth().padding(top = 16.dp)
@@ -122,6 +127,14 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 DebugExportStatus.Reindexing -> {
                     Text(
                         stringResource(R.string.developer_reindexing),
+                        Modifier.padding(top = 16.dp)
+                    )
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+
+                DebugExportStatus.TestingFusion -> {
+                    Text(
+                        stringResource(R.string.developer_fusion_smoke_testing),
                         Modifier.padding(top = 16.dp)
                     )
                     LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
@@ -164,6 +177,21 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                     Modifier.padding(top = 16.dp)
                 )
 
+                DebugExportStatus.FusionTestSuccess -> Text(
+                    stringResource(R.string.developer_fusion_smoke_success),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DebugExportStatus.FusionTestUnavailable -> Text(
+                    stringResource(R.string.developer_fusion_smoke_unavailable),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DebugExportStatus.FusionTestError -> Text(
+                    stringResource(R.string.developer_fusion_smoke_error),
+                    Modifier.padding(top = 16.dp)
+                )
+
                 DebugExportStatus.Idle -> Unit
             }
         }
@@ -173,5 +201,6 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
 private fun DebugExportStatus.isBusy(): Boolean = this in setOf(
     DebugExportStatus.Exporting,
     DebugExportStatus.Clearing,
-    DebugExportStatus.Reindexing
+    DebugExportStatus.Reindexing,
+    DebugExportStatus.TestingFusion
 )
