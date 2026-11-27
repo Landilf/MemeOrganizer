@@ -1,25 +1,28 @@
 package ru.landilf.memeorganizer.presentation.library
 
-import android.net.Uri
-import android.content.Intent
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,9 +36,9 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.core.logging.AppLogger
+import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeMediaType
-import ru.landilf.memeorganizer.domain.model.album.Album
 import ru.landilf.memeorganizer.presentation.common.FullMedia
 import java.io.File
 
@@ -58,8 +61,35 @@ fun LibraryViewer(
     var pendingDelete by rememberSaveable { mutableStateOf<Long?>(null) }
     var albumPickerVisible by rememberSaveable { mutableStateOf(false) }
     var secondaryMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var pendingExportId by rememberSaveable { mutableStateOf<Long?>(null) }
     var hasShownMedia by remember(initialId) { mutableStateOf(false) }
     val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("*/*")
+    ) { destination ->
+        val meme = pendingExportId?.let { id -> memes.firstOrNull { it.id == id } }
+        pendingExportId = null
+        if (destination != null && meme != null) {
+            viewModel.exportMeme(
+                meme = meme,
+                destination = destination,
+                onSuccess = {
+                    Toast.makeText(
+                        context,
+                        R.string.library_export_success,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                onFailure = {
+                    Toast.makeText(
+                        context,
+                        R.string.library_export_error,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
+        }
+    }
     BackHandler(enabled = edit == null) { onBack() }
     LaunchedEffect(memes.isNotEmpty()) {
         if (memes.isNotEmpty()) {
@@ -246,6 +276,16 @@ fun LibraryViewer(
                                 expanded = secondaryMenuExpanded,
                                 onDismissRequest = { secondaryMenuExpanded = false }
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.library_export)) },
+                                    leadingIcon = { Icon(Icons.Default.FileDownload, null) },
+                                    onClick = {
+                                        val meme = memes.getOrNull(pager.currentPage) ?: return@DropdownMenuItem
+                                        secondaryMenuExpanded = false
+                                        pendingExportId = meme.id
+                                        exportLauncher.launch(meme.fileName)
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.library_delete)) },
                                     leadingIcon = { Icon(Icons.Default.Delete, null) },

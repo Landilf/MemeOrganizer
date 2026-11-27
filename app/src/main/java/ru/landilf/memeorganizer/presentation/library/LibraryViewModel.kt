@@ -1,35 +1,37 @@
 package ru.landilf.memeorganizer.presentation.library
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.CancellationException
 import ru.landilf.memeorganizer.core.logging.AppLogger
+import ru.landilf.memeorganizer.core.logging.SearchActionLogWriter
+import ru.landilf.memeorganizer.domain.model.meme.Meme
+import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
+import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
+import ru.landilf.memeorganizer.domain.repository.MemeExportRepository
+import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
+import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.DeleteAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumMemesUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumsUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.RemoveMemesFromAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.album.RenameAlbumUseCase
+import ru.landilf.memeorganizer.domain.usecase.meme.MarkMemeUsedUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.ObserveMemesUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SetMemeFavoriteUseCase
-import ru.landilf.memeorganizer.domain.usecase.meme.MarkMemeUsedUseCase
-import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
-import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
-import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumsUseCase
-import ru.landilf.memeorganizer.domain.usecase.album.ObserveAlbumMemesUseCase
-import ru.landilf.memeorganizer.domain.usecase.album.DeleteAlbumUseCase
-import ru.landilf.memeorganizer.domain.usecase.album.RemoveMemesFromAlbumUseCase
-import ru.landilf.memeorganizer.domain.usecase.album.RenameAlbumUseCase
-import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
-import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
-import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
-import ru.landilf.memeorganizer.core.logging.SearchActionLogWriter
-import ru.landilf.memeorganizer.domain.model.meme.Meme
 import javax.inject.Inject
 
 enum class AlbumNameError { EmptyName, Duplicate, Failed }
@@ -59,6 +61,7 @@ class LibraryViewModel @Inject constructor(
     private val renameAlbumUseCase: RenameAlbumUseCase,
     private val deleteAlbumUseCase: DeleteAlbumUseCase,
     private val removeMemesFromAlbumUseCase: RemoveMemesFromAlbumUseCase,
+    private val memeExportRepository: MemeExportRepository,
     private val searchRepository: MemeSearchRepository,
     private val searchActionLog: SearchActionLogWriter
 ) : ViewModel() {
@@ -180,6 +183,26 @@ class LibraryViewModel @Inject constructor(
                 throw e
             } catch (error: Exception) {
                 AppLogger.app { "meme.usage.update.failed type=${error.javaClass.simpleName}" }
+            }
+        }
+    }
+
+    fun exportMeme(
+        meme: Meme,
+        destination: Uri,
+        onSuccess: () -> Unit,
+        onFailure: () -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                memeExportRepository.export(meme, destination)
+                recordMemeUsage(meme.id)
+                onSuccess()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppLogger.app { "media.export.failed type=${error.javaClass.simpleName}" }
+                onFailure()
             }
         }
     }

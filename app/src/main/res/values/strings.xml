@@ -107,6 +107,9 @@
     <string name="library_share">Поделиться</string>
     <string name="library_share_chooser">Отправить мем</string>
     <string name="library_share_error">Не удалось открыть меню отправки</string>
+    <string name="library_export">Сохранить копию</string>
+    <string name="library_export_success">Копия мема сохранена</string>
+    <string name="library_export_error">Не удалось сохранить копию мема</string>
     <string name="library_favorite">Добавить в избранное</string>
     <string name="library_remove_favorite">Убрать из избранного</string>
     <string name="library_more_actions">Дополнительные действия</string>
