@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,6 +7,18 @@ plugins {
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.androidx.room)
 }
+
+val releaseSigningProperties = Properties().apply {
+    val propertiesFile = rootProject.file("keystore.properties")
+    if (propertiesFile.isFile) {
+        propertiesFile.inputStream().use(::load)
+    }
+}
+
+fun releaseSigningValue(propertyName: String, environmentName: String): String? =
+    System.getenv(environmentName) ?: releaseSigningProperties.getProperty(propertyName)
+
+val releaseStoreFile = releaseSigningValue("storeFile", "RELEASE_STORE_FILE")
 
 room {
     schemaDirectory("$projectDir/schemas")
@@ -23,7 +37,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
@@ -33,8 +47,17 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = releaseStoreFile?.let(rootProject::file)
+            storePassword = releaseSigningValue("storePassword", "RELEASE_STORE_PASSWORD")
+            keyAlias = releaseSigningValue("keyAlias", "RELEASE_KEY_ALIAS")
+            keyPassword = releaseSigningValue("keyPassword", "RELEASE_KEY_PASSWORD")
+        }
+    }
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
