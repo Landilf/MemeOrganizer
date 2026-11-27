@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
@@ -320,6 +319,7 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                                     ModelStatus.NotInstalled -> R.string.settings_model_not_installed
                                     ModelStatus.Installing -> R.string.settings_model_installing
                                     ModelStatus.Installed -> R.string.settings_model_installed
+                                    ModelStatus.InsufficientStorage -> R.string.settings_model_storage_error
                                     ModelStatus.Error -> R.string.settings_model_error
                                 }
                             )
@@ -354,6 +354,7 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                             ModelUpdateNotice.UpToDate -> R.string.settings_model_update_up_to_date
                             ModelUpdateNotice.Offline -> R.string.settings_model_update_offline
                             ModelUpdateNotice.Installed -> R.string.settings_model_update_installed
+                            ModelUpdateNotice.InsufficientStorage -> R.string.settings_model_storage_error
                             ModelUpdateNotice.Error -> R.string.settings_model_update_error
                         }
                         if (modelUpdateState.checking) Text(stringResource(R.string.settings_model_update_checking))

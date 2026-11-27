@@ -10,10 +10,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.ml.GitHubModelUpdater
+import ru.landilf.memeorganizer.data.ml.InsufficientModelStorageException
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import javax.inject.Inject
 
-enum class ModelStatus { Checking, NotInstalled, Installing, Installed, Error }
+enum class ModelStatus { Checking, NotInstalled, Installing, Installed, InsufficientStorage, Error }
 
 @HiltViewModel
 class ModelSettingsViewModel @Inject constructor(
@@ -47,6 +48,9 @@ class ModelSettingsViewModel @Inject constructor(
                 _status.value = ModelStatus.Installed
             } catch (e: CancellationException) {
                 throw e
+            } catch (error: InsufficientModelStorageException) {
+                AppLogger.mlError(error) { "model.install.storage_insufficient" }
+                _status.value = ModelStatus.InsufficientStorage
             } catch (error: Exception) {
                 AppLogger.mlError(error) { "model.install.failed" }; _status.value =
                     ModelStatus.Error

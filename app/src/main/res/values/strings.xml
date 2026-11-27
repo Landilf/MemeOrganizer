@@ -123,6 +123,7 @@
     <string name="settings_model_not_installed">Модель не установлена</string>
     <string name="settings_model_installing">Установка модели… Не закрывайте настройки.</string>
     <string name="settings_model_installed">Модель установлена.</string>
+    <string name="settings_model_storage_error">Недостаточно свободного места для установки модели. Освободите место и попробуйте снова.</string>
     <string name="settings_model_error">Не удалось установить или проверить модель. Проверьте архив и попробуйте снова.</string>
     <string name="settings_model_check_update">Проверить обновления модели</string>
     <string name="settings_model_update_checking">Проверка обновлений…</string>

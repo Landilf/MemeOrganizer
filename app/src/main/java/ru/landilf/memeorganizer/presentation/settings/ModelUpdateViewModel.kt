@@ -10,13 +10,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.ml.GitHubModelUpdater
+import ru.landilf.memeorganizer.data.ml.InsufficientModelStorageException
 import ru.landilf.memeorganizer.data.ml.ModelDownloadProgress
 import ru.landilf.memeorganizer.data.ml.ModelRelease
 import ru.landilf.memeorganizer.data.ml.ModelUpdateCheck
 import ru.landilf.memeorganizer.data.ml.ModelUpdateOfflineException
 import javax.inject.Inject
 
-enum class ModelUpdateNotice { None, UpToDate, Offline, Installed, Error }
+enum class ModelUpdateNotice { None, UpToDate, Offline, Installed, InsufficientStorage, Error }
 
 data class ModelUpdateUiState(
     val checking: Boolean = false,
@@ -105,6 +106,11 @@ class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelU
                 throw error
             } catch (_: ModelUpdateOfflineException) {
                 _state.update { it.copy(progress = null, notice = ModelUpdateNotice.Offline) }
+            } catch (error: InsufficientModelStorageException) {
+                AppLogger.mlError(error) { "update.install.storage_insufficient" }
+                _state.update {
+                    it.copy(progress = null, notice = ModelUpdateNotice.InsufficientStorage)
+                }
             } catch (error: Exception) {
                 AppLogger.mlError(error) { "update.install.failed" }
                 _state.update { it.copy(progress = null, notice = ModelUpdateNotice.Error) }
