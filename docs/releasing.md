@@ -57,4 +57,4 @@ base64 -w 0 meme-organizer-release.jks
    ```
 
 4. Дождитесь workflow `Release Android APK`. Он создаст GitHub Release и
-   приложит `app-release.apk`.
+   приложит `MemeOrganizer.apk`.

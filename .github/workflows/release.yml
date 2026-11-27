@@ -47,11 +47,16 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
 
+      - name: Prepare release APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk \
+            "${RUNNER_TEMP}/MemeOrganizer.apk"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            app/build/outputs/apk/release/app-release.apk \
+            "${RUNNER_TEMP}/MemeOrganizer.apk" \
             --title "Meme Organizer ${GITHUB_REF_NAME}" \
             --generate-notes
