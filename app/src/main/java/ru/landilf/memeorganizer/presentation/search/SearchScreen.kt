@@ -110,7 +110,7 @@ fun SearchScreen(
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
-            items(state.results, key = { it.meme.id }) { result ->
+            if (!state.preparing) items(state.results, key = { it.meme.id }) { result ->
                 MediaThumbnail(
                     uri = Uri.fromFile(
                         File(

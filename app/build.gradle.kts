@@ -19,6 +19,9 @@ fun releaseSigningValue(propertyName: String, environmentName: String): String? 
     System.getenv(environmentName) ?: releaseSigningProperties.getProperty(propertyName)
 
 val releaseStoreFile = releaseSigningValue("storeFile", "RELEASE_STORE_FILE")
+val appVersionName = providers.gradleProperty("releaseVersionName").orElse("1.0.0").get()
+val appVersionCode = providers.gradleProperty("releaseVersionCode").orElse("1").get().toIntOrNull()
+    ?: error("releaseVersionCode must be an integer")
 
 room {
     schemaDirectory("$projectDir/schemas")
@@ -36,8 +39,8 @@ android {
         applicationId = "ru.landilf.memeorganizer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {

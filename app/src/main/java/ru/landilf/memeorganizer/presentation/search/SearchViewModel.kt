@@ -56,6 +56,7 @@ class SearchViewModel @Inject constructor(
     }
 
     fun updateQuery(query: String) {
+        val shouldSearch = query.isNotBlank() && _state.value.modelAvailable
         _state.value.results.firstOrNull()
             ?.takeIf { it.searchId !in actedSearchIds && query != _state.value.query }
             ?.let { result ->
@@ -68,16 +69,19 @@ class SearchViewModel @Inject constructor(
                     )
                 }
             }
-        _state.update { it.copy(query = query, error = false) }
-        queryJob?.cancel()
-        if (query.isBlank() || !_state.value.modelAvailable) {
-            _state.update { it.copy(results = emptyList()) }
-            return
+        _state.update {
+            it.copy(
+                query = query,
+                results = emptyList(),
+                preparing = shouldSearch,
+                error = false
+            )
         }
+        queryJob?.cancel()
+        if (!shouldSearch) return
         queryJob = viewModelScope.launch {
             delay(200)
             try {
-                _state.update { it.copy(preparing = true) }
                 val results = searchMemes(query)
                 _state.update { state ->
                     if (state.query == query) state.copy(

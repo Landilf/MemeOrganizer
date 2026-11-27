@@ -1,8 +1,8 @@
 # Публикация signed APK
 
-Release workflow запускается только после push аннотированного тега `v*`.
-Он запускает unit-тесты, собирает signed APK и создаёт GitHub Release с этим
-APK. Workflow не следует запускать, пока не настроены секреты ниже.
+Release workflow создаёт Git-тег, запускает unit-тесты, собирает signed APK и
+публикует GitHub Release с этим APK. Workflow не следует запускать, пока не
+настроены секреты ниже.
 
 ## Создание ключа
 
@@ -44,17 +44,23 @@ base64 -w 0 meme-organizer-release.jks
 
 ## Выпуск версии
 
-1. Убедитесь, что `versionName` в `app/build.gradle.kts` соответствует версии
-   будущего тега.
-2. Слейте PR с release-настройками в `main` и дождитесь успешного CI.
-3. Создайте и отправьте тег от актуального `main`:
+1. Слейте нужные PR в `main` и дождитесь успешного CI.
+2. Откройте в GitHub `Actions` → `Release Android APK` → `Run workflow`.
+3. Выберите ветку `main` и тип изменения версии:
 
-   ```bash
-   git checkout main
-   git pull --ff-only origin main
-   git tag -a v1.0.0 -m "Meme Organizer v1.0.0"
-   git push origin v1.0.0
-   ```
+   - `patch`: исправления, например `v1.0.0` → `v1.0.1`;
+   - `minor`: новая обратносовместимая функциональность, например `v1.0.0` →
+     `v1.1.0`;
+   - `major`: несовместимые изменения, например `v1.0.0` → `v2.0.0`.
 
-4. Дождитесь workflow `Release Android APK`. Он создаст GitHub Release и
-   приложит `MemeOrganizer.apk`.
+4. Запустите workflow. Он проверит unit-тесты, соберёт signed APK, а затем
+   создаст аннотированный тег на актуальном `main` и GitHub Release с
+   `MemeOrganizer.apk`. Если тесты или сборка не пройдут, номер версии не будет
+   занят тегом.
+
+`versionName` и `versionCode` в release APK рассчитываются по тегу. Для
+`v1.2.3` это соответственно `1.2.3` и `1002003`; вручную менять
+`app/build.gradle.kts` перед релизом не нужно.
+
+Push существующего тега формата `v<major>.<minor>.<patch>` также остаётся
+поддержанным и запускает ту же signed-сборку.
