@@ -12,6 +12,7 @@ import ru.landilf.memeorganizer.data.storage.dao.TextEmbeddingDao
 import ru.landilf.memeorganizer.data.storage.dao.LightLogDao
 import ru.landilf.memeorganizer.data.storage.dao.AlbumDao
 import ru.landilf.memeorganizer.data.storage.dao.TagDao
+import ru.landilf.memeorganizer.data.storage.dao.ExtractedTextChunkDao
 import ru.landilf.memeorganizer.data.storage.database.AppDatabase
 import ru.landilf.memeorganizer.data.storage.database.DatabaseMigrations
 import javax.inject.Singleton
@@ -31,7 +32,8 @@ object DatabaseModule {
                 DatabaseMigrations.MIGRATION_5_6,
                 DatabaseMigrations.MIGRATION_6_7,
                 DatabaseMigrations.MIGRATION_7_8,
-                DatabaseMigrations.MIGRATION_8_9
+                DatabaseMigrations.MIGRATION_8_9,
+                DatabaseMigrations.MIGRATION_9_10
             )
             .build()
 
@@ -41,6 +43,10 @@ object DatabaseModule {
     @Provides
     fun provideTextEmbeddingDao(database: AppDatabase): TextEmbeddingDao =
         database.textEmbeddingDao()
+
+    @Provides
+    fun provideExtractedTextChunkDao(database: AppDatabase): ExtractedTextChunkDao =
+        database.extractedTextChunkDao()
 
     @Provides
     fun provideLightLogDao(database: AppDatabase): LightLogDao = database.lightLogDao()
