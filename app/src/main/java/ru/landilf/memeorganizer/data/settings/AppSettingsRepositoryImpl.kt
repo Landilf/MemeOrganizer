@@ -30,7 +30,8 @@ class AppSettingsRepositoryImpl @Inject constructor(
                 ?.let { name -> LibrarySort.entries.firstOrNull { it.name == name } }
                 ?: LibrarySort.AddedAt,
             librarySortDirection = values[LIBRARY_SORT_DIRECTION]
-                ?.let { name -> SortDirection.entries.firstOrNull { it.name == name } },
+                ?.let { name -> SortDirection.entries.firstOrNull { it.name == name } }
+                ?: SortDirection.Descending,
             showRecentlyAddedAlbum = values[SHOW_RECENTLY_ADDED] ?: true,
             showRecentlyUsedAlbum = values[SHOW_RECENTLY_USED] ?: true,
             automaticBackupEnabled = values[AUTOMATIC_BACKUP_ENABLED] ?: false,
@@ -45,7 +46,10 @@ class AppSettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun setLibrarySort(sort: LibrarySort) {
-        context.appSettingsDataStore.edit { it[LIBRARY_SORT] = sort.name }
+        context.appSettingsDataStore.edit {
+            it[LIBRARY_SORT] = sort.name
+            it[LIBRARY_SORT_DIRECTION] = SortDirection.Descending.name
+        }
     }
 
     override suspend fun setLibrarySortDirection(direction: SortDirection) {

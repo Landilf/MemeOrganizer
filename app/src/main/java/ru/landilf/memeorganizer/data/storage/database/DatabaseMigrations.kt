@@ -4,6 +4,90 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object DatabaseMigrations {
+    val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `media_indexing_runs` ADD COLUMN `cancelledAtMillis` INTEGER")
+        }
+    }
+
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `media_indexing_runs` ADD COLUMN `pausedAtMillis` INTEGER")
+            db.execSQL(
+                "ALTER TABLE `media_indexing_runs` ADD COLUMN `totalPausedDurationMillis` INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
+
+    val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `media_indexing` ADD COLUMN `runId` INTEGER")
+            db.execSQL("ALTER TABLE `media_indexing` ADD COLUMN `processingStartedAtMillis` INTEGER")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `media_indexing_runs` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `startedAtMillis` INTEGER NOT NULL,
+                    `totalCount` INTEGER NOT NULL,
+                    `completedCount` INTEGER NOT NULL,
+                    `failedCount` INTEGER NOT NULL,
+                    `totalDurationMillis` INTEGER NOT NULL,
+                    `finishedAtMillis` INTEGER
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_media_indexing_runs_finishedAtMillis` ON `media_indexing_runs` (`finishedAtMillis`)"
+            )
+        }
+    }
+
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `media_indexing` (
+                    `memeId` INTEGER NOT NULL,
+                    `status` TEXT NOT NULL,
+                    `attemptCount` INTEGER NOT NULL,
+                    `lastError` TEXT,
+                    `updatedAtMillis` INTEGER NOT NULL,
+                    PRIMARY KEY(`memeId`),
+                    FOREIGN KEY(`memeId`) REFERENCES `memes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_media_indexing_status` ON `media_indexing` (`status`)"
+            )
+        }
+    }
+
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `extracted_text_chunks` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `memeId` INTEGER NOT NULL,
+                    `source` TEXT NOT NULL,
+                    `timestampMs` INTEGER,
+                    `text` TEXT NOT NULL,
+                    `modelReleaseTag` TEXT NOT NULL,
+                    `createdAtMillis` INTEGER NOT NULL,
+                    FOREIGN KEY(`memeId`) REFERENCES `memes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_extracted_text_chunks_memeId` ON `extracted_text_chunks` (`memeId`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_extracted_text_chunks_memeId_source_modelReleaseTag` ON `extracted_text_chunks` (`memeId`, `source`, `modelReleaseTag`)"
+            )
+        }
+    }
+
     val MIGRATION_8_9 = object : Migration(8, 9) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE `memes` ADD COLUMN `lastUsedAtMillis` INTEGER")

@@ -17,21 +17,28 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.stringResource
 import ru.landilf.memeorganizer.R
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
+import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
 import ru.landilf.memeorganizer.presentation.common.FullMedia
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
 import ru.landilf.memeorganizer.presentation.library.MemeDetailsEditorDialog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -56,60 +63,42 @@ fun ImportScreen(state: ImportUiState, viewModel: ImportViewModel, onClose: () -
         if (state.sources.isEmpty() && !state.importing) onClose()
     }
     if (confirmCancel) {
-        AlertDialog(
-            onDismissRequest = { confirmCancel = false },
-            title = { Text(stringResource(R.string.import_cancel_confirmation_title)) },
-            text = { Text(stringResource(R.string.import_cancel_confirmation_message)) },
-            confirmButton = {
-                TextButton(onClick = { confirmCancel = false }) {
-                    Text(
-                        stringResource(
-                            R.string.no_button
-                        )
-                    )
-                }
+        ConfirmationDialog(
+            title = R.string.import_cancel_confirmation_title,
+            message = R.string.import_cancel_confirmation_message,
+            onConfirm = {
+                confirmCancel = false
+                viewModel.setSources(emptyList())
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    confirmCancel = false; viewModel.setSources(
-                    emptyList()
-                )
-                }) { Text(stringResource(R.string.yes_button)) }
-            }
+            onDismiss = { confirmCancel = false }
         )
     }
     if (pendingRemoval.isNotEmpty()) {
-        AlertDialog(
-            onDismissRequest = { pendingRemoval = emptyList() },
+        ConfirmationDialog(
             title = {
                 Text(
-                    if (pendingRemoval.size == 1) stringResource(R.string.import_remove_confirmation_title) else stringResource(
-                        R.string.import_remove_multiple_confirmation_title,
-                        pendingRemoval.size
-                    )
+                    if (pendingRemoval.size == 1) {
+                        stringResource(R.string.import_remove_confirmation_title)
+                    } else {
+                        stringResource(
+                            R.string.import_remove_multiple_confirmation_title,
+                            pendingRemoval.size
+                        )
+                    }
                 )
             },
-            text = { Text(stringResource(R.string.import_remove_confirmation_message)) },
-            dismissButton = {
-                TextButton(onClick = {
-                    val removed = pendingRemoval.toSet()
-                    if (fullScreenSource != null) {
-                        val current = state.sources.indexOf(fullScreenSource).coerceAtLeast(0)
-                        val remaining = state.sources.filterNot { it in removed }
-                        fullScreenSource =
-                            remaining.getOrNull(current.coerceAtMost(remaining.lastIndex))
-                    }
-                    viewModel.remove(removed)
-                    pendingRemoval = emptyList()
-                }) { Text(stringResource(R.string.yes_button)) }
-            },
-            confirmButton = {
-                TextButton(onClick = { pendingRemoval = emptyList() }) {
-                    Text(
-                        stringResource(R.string.no_button)
-                    )
+            message = { Text(stringResource(R.string.import_remove_confirmation_message)) },
+            onConfirm = {
+                val removed = pendingRemoval.toSet()
+                if (fullScreenSource != null) {
+                    val current = state.sources.indexOf(fullScreenSource).coerceAtLeast(0)
+                    val remaining = state.sources.filterNot { it in removed }
+                    fullScreenSource = remaining.getOrNull(current.coerceAtMost(remaining.lastIndex))
                 }
-            }
+                viewModel.remove(removed)
+                pendingRemoval = emptyList()
+            },
+            onDismiss = { pendingRemoval = emptyList() }
         )
     }
     editingSource?.let { source ->

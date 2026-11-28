@@ -82,7 +82,12 @@ class DatabaseMigrationsTest {
                     DatabaseMigrations.MIGRATION_5_6,
                     DatabaseMigrations.MIGRATION_6_7,
                     DatabaseMigrations.MIGRATION_7_8,
-                    DatabaseMigrations.MIGRATION_8_9
+                    DatabaseMigrations.MIGRATION_8_9,
+                    DatabaseMigrations.MIGRATION_9_10,
+                    DatabaseMigrations.MIGRATION_10_11,
+                    DatabaseMigrations.MIGRATION_11_12,
+                    DatabaseMigrations.MIGRATION_12_13,
+                    DatabaseMigrations.MIGRATION_13_14
                 )
                 .build()
             try {
@@ -265,6 +270,54 @@ class DatabaseMigrationsTest {
                     assertTrue(cursor.moveToFirst())
                     assertTrue(cursor.isNull(0))
                     assertEquals(0L, cursor.getLong(1))
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion11AndCreatesIndexingRunStorage() {
+        helper.createDatabase(databaseName, 11).close()
+        helper.runMigrationsAndValidate(databaseName, 12, true, DatabaseMigrations.MIGRATION_11_12)
+            .use { database ->
+                database.query("PRAGMA table_info(media_indexing)").use { cursor ->
+                    val names = buildSet {
+                        while (cursor.moveToNext()) add(cursor.getString(1))
+                    }
+                    assertTrue("runId" in names)
+                    assertTrue("processingStartedAtMillis" in names)
+                }
+                database.query("SELECT COUNT(*) FROM media_indexing_runs").use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion12AndAddsPauseAccountingToIndexingRuns() {
+        helper.createDatabase(databaseName, 12).close()
+        helper.runMigrationsAndValidate(databaseName, 13, true, DatabaseMigrations.MIGRATION_12_13)
+            .use { database ->
+                database.query("PRAGMA table_info(media_indexing_runs)").use { cursor ->
+                    val names = buildSet {
+                        while (cursor.moveToNext()) add(cursor.getString(1))
+                    }
+                    assertTrue("pausedAtMillis" in names)
+                    assertTrue("totalPausedDurationMillis" in names)
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion13AndAddsCancellationToIndexingRuns() {
+        helper.createDatabase(databaseName, 13).close()
+        helper.runMigrationsAndValidate(databaseName, 14, true, DatabaseMigrations.MIGRATION_13_14)
+            .use { database ->
+                database.query("PRAGMA table_info(media_indexing_runs)").use { cursor ->
+                    val names = buildSet {
+                        while (cursor.moveToNext()) add(cursor.getString(1))
+                    }
+                    assertTrue("cancelledAtMillis" in names)
                 }
             }
     }

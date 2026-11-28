@@ -61,31 +61,82 @@ class LibraryBackupRepositoryImpl @Inject constructor(
                     "Cannot open backup directory"
                 }
                 check(parent.exists() && parent.canWrite()) { "Backup directory is unavailable" }
-                parent.findFile(AUTOMATIC_BACKUP_TEMP_FILE_NAME)?.let { temporary ->
-                    check(temporary.delete()) { "Cannot replace incomplete automatic backup" }
-                }
+                recoverAutomaticBackup(parent)
                 val destination = requireNotNull(
                     parent.createFile("application/zip", AUTOMATIC_BACKUP_TEMP_FILE_NAME)
                 ) {
                     "Cannot create automatic backup"
                 }
-                try {
-                    context.contentResolver.openOutputStream(destination.uri)?.buffered()?.use { output ->
-                        writeArchive(output, snapshot)
-                    } ?: error("Cannot open automatic backup destination")
-                    parent.findFile(AUTOMATIC_BACKUP_FILE_NAME)?.let { previous ->
-                        check(previous.delete()) { "Cannot replace automatic backup" }
-                    }
-                    check(destination.renameTo(AUTOMATIC_BACKUP_FILE_NAME)) {
-                        "Cannot finalize automatic backup"
-                    }
-                } catch (error: Exception) {
-                    destination.delete()
-                    throw error
-                }
+                context.contentResolver.openOutputStream(destination.uri)?.buffered()?.use { output ->
+                    writeArchive(output, snapshot)
+                } ?: error("Cannot open automatic backup destination")
+                replaceAutomaticBackup(parent, destination)
                 LibraryBackupSummary(snapshot.memes.size, snapshot.albums.size)
             }
         }
+
+    /** Finalizes a completed staged archive after an interrupted replacement. */
+    private fun recoverAutomaticBackup(parent: DocumentFile) {
+        val current = parent.findFile(AUTOMATIC_BACKUP_FILE_NAME)
+        val staged = parent.findFile(AUTOMATIC_BACKUP_TEMP_FILE_NAME)
+        val legacyPrevious = parent.findFile(LEGACY_AUTOMATIC_BACKUP_PREVIOUS_FILE_NAME)
+        when {
+            current == null && staged != null -> {
+                copyStagedBackupToPrimary(parent, staged)
+                check(staged.delete()) { "Cannot remove recovered automatic backup" }
+                legacyPrevious?.let { previous ->
+                    check(previous.delete()) { "Cannot remove obsolete automatic backup" }
+                }
+            }
+
+            current == null && legacyPrevious != null -> {
+                copyStagedBackupToPrimary(parent, legacyPrevious)
+                check(legacyPrevious.delete()) { "Cannot remove recovered automatic backup" }
+            }
+
+            current != null -> {
+                staged?.let { temporary ->
+                    check(temporary.delete()) { "Cannot remove incomplete automatic backup" }
+                }
+                legacyPrevious?.let { previous ->
+                    check(previous.delete()) { "Cannot remove obsolete automatic backup" }
+                }
+            }
+        }
+    }
+
+    /**
+     * Some SAF providers do not implement document renaming. A completed staged archive therefore
+     * remains available until its bytes have been copied into a newly created primary document.
+     */
+    private fun replaceAutomaticBackup(parent: DocumentFile, destination: DocumentFile) {
+        parent.findFile(AUTOMATIC_BACKUP_FILE_NAME)?.let { current ->
+            check(current.delete()) { "Cannot replace automatic backup" }
+        }
+        copyStagedBackupToPrimary(parent, destination)
+        check(destination.delete()) { "Cannot remove temporary automatic backup" }
+    }
+
+    private fun copyStagedBackupToPrimary(parent: DocumentFile, staged: DocumentFile) {
+        val primary = requireNotNull(
+            parent.createFile("application/zip", AUTOMATIC_BACKUP_FILE_NAME)
+        ) { "Cannot create automatic backup destination" }
+        try {
+            check(primary.name == AUTOMATIC_BACKUP_FILE_NAME) {
+                "Cannot create automatic backup with the expected name"
+            }
+            val input = requireNotNull(context.contentResolver.openInputStream(staged.uri)) {
+                "Cannot open temporary automatic backup"
+            }
+            input.buffered().use { source ->
+                context.contentResolver.openOutputStream(primary.uri)?.buffered()?.use(source::copyTo)
+                    ?: error("Cannot open automatic backup destination")
+            }
+        } catch (error: Exception) {
+            primary.delete()
+            throw error
+        }
+    }
 
     override suspend fun restore(source: Uri): LibraryRestoreSummary = withContext(Dispatchers.IO) {
         val archive = copyArchiveToCache(source)
@@ -418,6 +469,8 @@ class LibraryBackupRepositoryImpl @Inject constructor(
         const val MANIFEST_ENTRY = "manifest.json"
         const val AUTOMATIC_BACKUP_FILE_NAME = "meme-organizer-library-backup.zip"
         const val AUTOMATIC_BACKUP_TEMP_FILE_NAME = ".meme-organizer-library-backup.new.zip"
+        const val LEGACY_AUTOMATIC_BACKUP_PREVIOUS_FILE_NAME =
+            ".meme-organizer-library-backup.previous.zip"
         val HASH_REGEX = Regex("[0-9a-f]{64}")
         val FILE_NAME_REGEX = Regex("[A-Za-z0-9-]{1,64}")
 

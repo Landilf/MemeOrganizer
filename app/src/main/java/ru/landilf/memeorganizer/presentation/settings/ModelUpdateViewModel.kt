@@ -10,13 +10,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.ml.GitHubModelUpdater
+import ru.landilf.memeorganizer.data.ml.InsufficientModelStorageException
 import ru.landilf.memeorganizer.data.ml.ModelDownloadProgress
 import ru.landilf.memeorganizer.data.ml.ModelRelease
 import ru.landilf.memeorganizer.data.ml.ModelUpdateCheck
 import ru.landilf.memeorganizer.data.ml.ModelUpdateOfflineException
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import javax.inject.Inject
 
-enum class ModelUpdateNotice { None, UpToDate, Offline, Installed, Error }
+enum class ModelUpdateNotice { None, UpToDate, Offline, Installed, InsufficientStorage, Error }
 
 data class ModelUpdateUiState(
     val checking: Boolean = false,
@@ -26,7 +28,10 @@ data class ModelUpdateUiState(
 )
 
 @HiltViewModel
-class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelUpdater) :
+class ModelUpdateViewModel @Inject constructor(
+    private val updater: GitHubModelUpdater,
+    private val mediaIndexingRepository: MediaIndexingRepository
+) :
     ViewModel() {
     private val _state = MutableStateFlow(ModelUpdateUiState())
     val state = _state.asStateFlow()
@@ -94,6 +99,13 @@ class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelU
         viewModelScope.launch {
             try {
                 updater.downloadAndInstall(release) { progress -> _state.update { it.copy(progress = progress) } }
+                try {
+                    mediaIndexingRepository.resumePending()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    AppLogger.mlError(error) { "media_indexing.resume.failed" }
+                }
                 _state.update {
                     it.copy(
                         available = null,
@@ -105,6 +117,11 @@ class ModelUpdateViewModel @Inject constructor(private val updater: GitHubModelU
                 throw error
             } catch (_: ModelUpdateOfflineException) {
                 _state.update { it.copy(progress = null, notice = ModelUpdateNotice.Offline) }
+            } catch (error: InsufficientModelStorageException) {
+                AppLogger.mlError(error) { "update.install.storage_insufficient" }
+                _state.update {
+                    it.copy(progress = null, notice = ModelUpdateNotice.InsufficientStorage)
+                }
             } catch (error: Exception) {
                 AppLogger.mlError(error) { "update.install.failed" }
                 _state.update { it.copy(progress = null, notice = ModelUpdateNotice.Error) }

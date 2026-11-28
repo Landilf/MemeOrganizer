@@ -14,6 +14,7 @@ import ru.landilf.memeorganizer.domain.model.meme.MemeTextRules
 import ru.landilf.memeorganizer.domain.model.meme.TagSuggestion
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.core.logging.LightLogStore
+import ru.landilf.memeorganizer.domain.repository.MemeThumbnailRepository
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -22,7 +23,8 @@ import javax.inject.Inject
 class MemeDetailsRepositoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val database: AppDatabase,
-    private val lightLog: LightLogStore
+    private val lightLog: LightLogStore,
+    private val thumbnailRepository: MemeThumbnailRepository
 ) : MemeDetailsRepository {
     private val memes get() = database.memeDao()
     private val tags get() = database.tagDao()
@@ -89,6 +91,7 @@ class MemeDetailsRepositoryImpl @Inject constructor(
                 throw error
             }
             if (moved && !pending.delete()) throw java.io.IOException("Cannot remove file copy")
+            thumbnailRepository.delete(meme.storedFileName)
         }
     }
 }

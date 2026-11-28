@@ -20,6 +20,11 @@ import java.util.zip.GZIPInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
+class InsufficientModelStorageException(
+    val requiredBytes: Long,
+    val availableBytes: Long
+) : IOException("Insufficient storage for model package")
+
 @Singleton
 class LocalModelInstaller @Inject constructor(@param:ApplicationContext private val context: Context) {
     private val directory get() = File(context.filesDir, "models/text")
@@ -31,7 +36,10 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
         require(id.matches(Regex("[0-9a-f-]{36}")))
         try {
             TextModelPackage.load(File(directory, id)).also { model ->
-                AppLogger.ml { "model.active tag=${model.releaseTag} sha=${model.modelSha256.take(12)} dim=${model.dimension}" }
+                AppLogger.ml {
+                    "model.active tag=${model.releaseTag} sha=${model.modelSha256.take(12)} " +
+                        "dim=${model.dimension}"
+                }
             }
         } catch (error: Exception) {
             pointer.delete()
@@ -61,21 +69,16 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
         onArchiveReadFinished: () -> Unit
     ): TextModelPackage {
         AppLogger.ml { "model.install.start" }
-        require(expectedArchiveSha256 == null || expectedArchiveSha256.matches(Regex("[0-9a-fA-F]{64}"))) { "Invalid archive SHA-256" }
+        require(
+            expectedArchiveSha256 == null ||
+                expectedArchiveSha256.matches(Regex("[0-9a-fA-F]{64}"))
+        ) { "Invalid archive SHA-256" }
         if (!directory.isDirectory && !directory.mkdirs()) throw IOException("Cannot create model directory")
         val id = UUID.randomUUID().toString()
         val staged = File(directory, id)
         if (!staged.mkdir()) throw IOException("Cannot create model staging directory")
         var activated = false
         try {
-            val allowed = setOf(
-                "preset_manifest.json",
-                "text_encoder_int8.onnx",
-                "smoke_test_pack.json",
-                "README.md",
-                "tokenizer/tokenizer.json",
-                "tokenizer/tokenizer_config.json"
-            )
             val seen = mutableSetOf<String>()
             var total = 0L
             val archiveDigest = expectedArchiveSha256?.let { MessageDigest.getInstance("SHA-256") }
@@ -87,14 +90,23 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
                             currentCoroutineContext().ensureActive()
                             val entry = tar.nextEntry ?: break
                             if (entry.isDirectory) continue
-                            require(entry.isFile && !entry.isSymbolicLink && !entry.isLink) { "Unsupported archive entry" }
+                            require(entry.isFile && !entry.isSymbolicLink && !entry.isLink) {
+                                "Unsupported archive entry"
+                            }
                             val parts = entry.name.split('/')
-                            require(parts.size >= 2 && parts.first() == "meme-organizer-text-champion" && parts.none { it == ".." || it == "." || it.isEmpty() }) { "Invalid archive path" }
+                            require(
+                                parts.size >= 2 &&
+                                    PACKAGE_ROOT.matches(parts.first()) &&
+                                    parts.none { it == ".." || it == "." || it.isEmpty() }
+                            ) { "Invalid archive path" }
                             val relative = parts.drop(1).joinToString("/")
-                            require(relative in allowed && seen.add(relative)) { "Unsupported or repeated archive file" }
-                            require(entry.size in 0..(200L * 1024 * 1024)) { "Archive file too large" }
+                            require(relative in SUPPORTED_FILES && seen.add(relative)) {
+                                "Unsupported or repeated archive file"
+                            }
+                            require(entry.size in 0..MAX_FILE_BYTES) { "Archive file too large" }
                             total += entry.size
-                            require(total <= 300L * 1024 * 1024) { "Archive too large" }
+                            require(total <= MAX_PACKAGE_BYTES) { "Archive too large" }
+                            ensureStorageFor(entry.size)
                             val output = File(staged, relative)
                             output.parentFile?.mkdirs()
                             output.outputStream().buffered().use { out ->
@@ -135,7 +147,7 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
                     model.modelSha256.take(
                         12
                     )
-                } dim=${model.dimension}"
+                } dim=${model.dimension} components=${model.components.size}"
             }
             return model
         } finally {
@@ -151,5 +163,38 @@ class LocalModelInstaller @Inject constructor(@param:ApplicationContext private 
                 if (oldPackage.deleteRecursively()) AppLogger.ml { "model.cleanup.removed package=${oldPackage.name}" }
                 else AppLogger.ml { "model.cleanup.failed package=${oldPackage.name}" }
             }
+    }
+
+    private fun ensureStorageFor(entrySize: Long) {
+        val available = context.filesDir.usableSpace
+        if (available - entrySize < MINIMUM_FREE_BYTES) {
+            throw InsufficientModelStorageException(
+                requiredBytes = entrySize + MINIMUM_FREE_BYTES,
+                availableBytes = available
+            )
+        }
+    }
+
+    private companion object {
+        const val MEBIBYTE = 1024L * 1024L
+        const val MAX_FILE_BYTES = 300L * MEBIBYTE
+        const val MAX_PACKAGE_BYTES = 512L * MEBIBYTE
+        const val MINIMUM_FREE_BYTES = 64L * MEBIBYTE
+
+        val PACKAGE_ROOT = Regex("meme-organizer-(?:text-champion|multimodal-v\\d+)")
+        val SUPPORTED_FILES = setOf(
+            "preset_manifest.json",
+            "text_encoder_int8.onnx",
+            "smoke_test_pack.json",
+            "README.md",
+            "tokenizer/tokenizer.json",
+            "tokenizer/tokenizer_config.json",
+            "ocr/det.onnx",
+            "ocr/inference.onnx",
+            "ocr/dict.txt",
+            "asr/model.int8.onnx",
+            "asr/tokens.txt",
+            "gated_attention_fusion.onnx"
+        )
     }
 }

@@ -18,11 +18,13 @@ datastore = "1.2.1"
 hilt = "2.60"
 androidxHilt = "1.2.0"
 coroutines = "1.11.0"
-onnxRuntime = "1.20.0"
+onnxRuntime = "1.17.1"
+sherpaOnnx = "1.10.37"
 commonsCompress = "1.27.1"
 djl = "0.33.0"
 work = "2.10.5"
 documentfile = "1.1.0"
+opencv = "4.9.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -55,11 +57,13 @@ hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hil
 androidx-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "androidxHilt" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxRuntime" }
+sherpa-onnx = { module = "com.k2fsa.sherpa.onnx:sherpa-onnx", version.ref = "sherpaOnnx" }
 commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonsCompress" }
 djl-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djl" }
 djl-tokenizer-native = { module = "ai.djl.android:tokenizer-native", version.ref = "djl" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
+opencv = { module = "org.opencv:opencv", version.ref = "opencv" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

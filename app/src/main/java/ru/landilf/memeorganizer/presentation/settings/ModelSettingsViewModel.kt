@@ -10,15 +10,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.ml.GitHubModelUpdater
+import ru.landilf.memeorganizer.data.ml.InsufficientModelStorageException
 import ru.landilf.memeorganizer.core.logging.AppLogger
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import javax.inject.Inject
 
-enum class ModelStatus { Checking, NotInstalled, Installing, Installed, Error }
+enum class ModelStatus { Checking, NotInstalled, Installing, Installed, InsufficientStorage, Error }
 
 @HiltViewModel
 class ModelSettingsViewModel @Inject constructor(
     private val installer: LocalModelInstaller,
-    private val updater: GitHubModelUpdater
+    private val updater: GitHubModelUpdater,
+    private val mediaIndexingRepository: MediaIndexingRepository
 ) : ViewModel() {
     private val _status = MutableStateFlow(ModelStatus.Checking)
     val status = _status.asStateFlow()
@@ -44,9 +47,19 @@ class ModelSettingsViewModel @Inject constructor(
             try {
                 val model = installer.install(uri)
                 updater.recordInstalledTag(model.releaseTag)
+                try {
+                    mediaIndexingRepository.resumePending()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    AppLogger.mlError(error) { "media_indexing.resume.failed" }
+                }
                 _status.value = ModelStatus.Installed
             } catch (e: CancellationException) {
                 throw e
+            } catch (error: InsufficientModelStorageException) {
+                AppLogger.mlError(error) { "model.install.storage_insufficient" }
+                _status.value = ModelStatus.InsufficientStorage
             } catch (error: Exception) {
                 AppLogger.mlError(error) { "model.install.failed" }; _status.value =
                     ModelStatus.Error

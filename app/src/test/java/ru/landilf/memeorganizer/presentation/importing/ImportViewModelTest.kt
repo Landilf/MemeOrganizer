@@ -16,14 +16,14 @@ import org.junit.Test
 import ru.landilf.memeorganizer.domain.model.importing.ImportFailure
 import ru.landilf.memeorganizer.domain.model.importing.ImportResult
 import ru.landilf.memeorganizer.domain.model.importing.ImportSource
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingRun
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
 import ru.landilf.memeorganizer.domain.model.meme.TagSuggestion
-import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
-import ru.landilf.memeorganizer.domain.model.search.SearchPreparation
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import ru.landilf.memeorganizer.domain.repository.MemeRepository
-import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 import ru.landilf.memeorganizer.domain.usecase.meme.ImportMemesUseCase
 import ru.landilf.memeorganizer.domain.usecase.meme.SaveMemeDetailsUseCase
 
@@ -43,18 +43,28 @@ class ImportViewModelTest {
         override suspend fun markUsed(memeId: Long) = Unit
         override suspend fun delete(memeIds: Set<Long>) = Unit
     }
-    private val searchRepository = object : MemeSearchRepository {
-        override suspend fun prepare() = SearchPreparation(false, 0)
-        override suspend fun reindexAll() = SearchPreparation(false, 0)
-        override suspend fun indexMeme(memeId: Long) = Unit
-        override suspend fun search(query: String) = emptyList<MemeSearchResult>()
+    private val mediaIndexingRepository = object : MediaIndexingRepository {
+        override suspend fun enqueue(memeId: Long) = Unit
+        override suspend fun enqueueAll(memeIds: List<Long>) = memeIds.size
+        override suspend fun resumePending() = Unit
+        override suspend fun pauseQueue() = Unit
+        override suspend fun resumeQueue() = Unit
+        override suspend fun cancelQueue() = Unit
+        override suspend fun retryFailed() = 0
+        override suspend fun retryFailed(memeId: Long) = false
+        override suspend fun failureReason(memeId: Long): String? = null
+        override suspend fun simulateFailureForDebug(memeId: Long) = Unit
+        override suspend fun reprocessAll() = 0
+        override fun observeStatuses() = flowOf(emptyMap<Long, MediaIndexingStatus>())
+        override fun observeRuns() = flowOf(emptyList<MediaIndexingRun>())
+        override fun observeQueuePaused() = flowOf(false)
     }
 
     private fun createViewModel(savedState: SavedStateHandle) = ImportViewModel(
         importMemes = ImportMemesUseCase(repository),
         detailsRepository = detailsRepository,
         saveMemeDetails = SaveMemeDetailsUseCase(detailsRepository),
-        searchRepository = searchRepository,
+        mediaIndexingRepository = mediaIndexingRepository,
         savedStateHandle = savedState
     )
 

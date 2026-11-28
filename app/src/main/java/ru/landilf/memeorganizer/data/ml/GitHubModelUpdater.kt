@@ -24,10 +24,12 @@ private val Context.modelUpdateDataStore by preferencesDataStore("model_update")
 data class ModelRelease(
     val tag: String,
     val title: String,
+    val isPrerelease: Boolean,
     val archiveName: String,
     val archiveUrl: String,
     val archiveSizeBytes: Long,
-    val archiveSha256: String
+    val checksumsUrl: String,
+    val archiveSha256: String? = null
 )
 
 sealed interface ModelUpdateCheck {
@@ -67,6 +69,32 @@ class GitHubModelUpdater @Inject constructor(
         ModelUpdateCheck.Available(release)
     }
 
+    /**
+     * Lists installable model bundles for the developer picker. Unlike automatic updates, this
+     * intentionally includes prereleases and allows selecting an older package.
+     */
+    suspend fun availableReleases(): List<ModelRelease> = withContext(Dispatchers.IO) {
+        if (!isOnline()) throw ModelUpdateOfflineException()
+        val connection = openConnection(ALL_RELEASES_URL)
+        val releases = try {
+            require(connection.responseCode in 200..299) { "Cannot load model releases" }
+            org.json.JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+        } finally {
+            connection.disconnect()
+        }
+        (0 until releases.length()).mapNotNull { index ->
+            val release = releases.getJSONObject(index)
+            if (release.getBoolean("draft")) return@mapNotNull null
+            runCatching { release.toModelRelease(loadChecksum = false) }
+                .onFailure { error ->
+                    AppLogger.ml {
+                        "update.release.skip tag=${release.optString("tag_name")} type=${error.javaClass.simpleName}"
+                    }
+                }
+                .getOrNull()
+        }
+    }
+
     suspend fun dismiss(release: ModelRelease) {
         context.modelUpdateDataStore.edit { it[DISMISSED_TAG] = release.tag }
     }
@@ -82,6 +110,8 @@ class GitHubModelUpdater @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         if (!isOnline()) throw ModelUpdateOfflineException()
         AppLogger.ml { "update.download.start tag=${release.tag} bytes=${release.archiveSizeBytes}" }
+        val archiveSha256 = release.archiveSha256
+            ?: checksumFor(downloadText(release.checksumsUrl), release.archiveName)
         val connection = openConnection(release.archiveUrl)
         try {
             require(connection.responseCode in 200..299) { "Cannot download model archive" }
@@ -90,7 +120,7 @@ class GitHubModelUpdater @Inject constructor(
                 val progress = ProgressInputStream(source, total) { downloaded ->
                     onProgress(ModelDownloadProgress.Downloading(downloaded, total))
                 }
-                installer.installDownloaded(progress, release.archiveSha256) {
+                installer.installDownloaded(progress, archiveSha256) {
                     onProgress(ModelDownloadProgress.Installing)
                 }
             }
@@ -113,9 +143,13 @@ class GitHubModelUpdater @Inject constructor(
             connection.disconnect()
         }
         require(!release.getBoolean("draft") && !release.getBoolean("prerelease")) { "Latest release is not stable" }
-        val tag = release.getString("tag_name")
+        return release.toModelRelease(loadChecksum = true)
+    }
+
+    private fun JSONObject.toModelRelease(loadChecksum: Boolean): ModelRelease {
+        val tag = getString("tag_name")
         require(VERSION_PATTERN.matches(tag)) { "Unsupported model release tag" }
-        val assets = release.getJSONArray("assets")
+        val assets = getJSONArray("assets")
         fun asset(predicate: (String) -> Boolean): JSONObject? = (0 until assets.length())
             .asSequence().map { assets.getJSONObject(it) }
             .firstOrNull { predicate(it.getString("name")) }
@@ -129,15 +163,20 @@ class GitHubModelUpdater @Inject constructor(
             )
         }) { "SHA256SUMS.txt is missing" }
         val archiveName = archive.getString("name")
-        val checksum =
-            checksumFor(downloadText(checksums.getString("browser_download_url")), archiveName)
+        val checksumsUrl = checksums.getString("browser_download_url")
         return ModelRelease(
             tag = tag,
-            title = release.optString("name").ifBlank { tag },
+            title = optString("name").ifBlank { tag },
+            isPrerelease = getBoolean("prerelease"),
             archiveName = archiveName,
             archiveUrl = archive.getString("browser_download_url"),
             archiveSizeBytes = archive.getLong("size"),
-            archiveSha256 = checksum
+            checksumsUrl = checksumsUrl,
+            archiveSha256 = if (loadChecksum) {
+                checksumFor(downloadText(checksumsUrl), archiveName)
+            } else {
+                null
+            }
         )
     }
 
@@ -207,6 +246,8 @@ class GitHubModelUpdater @Inject constructor(
     private companion object {
         const val LATEST_RELEASE_URL =
             "https://api.github.com/repos/alexo375/meme-organizer/releases/latest"
+        const val ALL_RELEASES_URL =
+            "https://api.github.com/repos/alexo375/meme-organizer/releases?per_page=20"
         val INSTALLED_TAG = stringPreferencesKey("installed_model_release_tag")
         val DISMISSED_TAG = stringPreferencesKey("dismissed_model_release_tag")
         val VERSION_PATTERN = Regex("v(\\d+)\\.(\\d+)\\.(\\d+)-mobile")

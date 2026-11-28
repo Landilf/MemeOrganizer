@@ -19,7 +19,7 @@ enum class AutomaticBackupPeriod(val days: Long) {
 
 data class AppSettings(
     val librarySort: LibrarySort = LibrarySort.AddedAt,
-    val librarySortDirection: SortDirection? = null,
+    val librarySortDirection: SortDirection = SortDirection.Descending,
     val showRecentlyAddedAlbum: Boolean = true,
     val showRecentlyUsedAlbum: Boolean = true,
     val automaticBackupEnabled: Boolean = false,

@@ -15,6 +15,7 @@ import ru.landilf.memeorganizer.data.storage.database.AppDatabase
 import ru.landilf.memeorganizer.data.storage.entities.meme.MemeEntity
 import ru.landilf.memeorganizer.core.logging.LightLogStore
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
+import ru.landilf.memeorganizer.domain.repository.MemeThumbnailRepository
 import java.io.File
 import java.util.UUID
 
@@ -33,7 +34,11 @@ class MemeDetailsRepositoryImplTest {
         repository = MemeDetailsRepositoryImpl(
             context,
             database,
-            LightLogStore(context, database.lightLogDao())
+            LightLogStore(context, database.lightLogDao()),
+            object : MemeThumbnailRepository {
+                override suspend fun scheduleMissing() = Unit
+                override suspend fun delete(storedFileName: String) = Unit
+            }
         )
         val directory = File(context.filesDir, "memes").apply { mkdirs() }
         file = File(directory, UUID.randomUUID().toString()).apply { writeText("media") }

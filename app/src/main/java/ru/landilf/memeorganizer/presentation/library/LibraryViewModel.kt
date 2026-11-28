@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -18,9 +19,11 @@ import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.core.logging.SearchActionLogWriter
 import ru.landilf.memeorganizer.domain.model.meme.Meme
 import ru.landilf.memeorganizer.domain.model.meme.MemeDetails
+import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingProgress
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeExportRepository
-import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
+import ru.landilf.memeorganizer.domain.repository.MemeThumbnailRepository
 import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.DeleteAlbumUseCase
@@ -46,6 +49,11 @@ data class EditState(
     val error: Boolean = false
 )
 
+data class IndexingFailureState(
+    val memeId: Long,
+    val reason: String
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
@@ -62,9 +70,14 @@ class LibraryViewModel @Inject constructor(
     private val deleteAlbumUseCase: DeleteAlbumUseCase,
     private val removeMemesFromAlbumUseCase: RemoveMemesFromAlbumUseCase,
     private val memeExportRepository: MemeExportRepository,
-    private val searchRepository: MemeSearchRepository,
+    private val mediaIndexingRepository: MediaIndexingRepository,
+    private val memeThumbnailRepository: MemeThumbnailRepository,
     private val searchActionLog: SearchActionLogWriter
 ) : ViewModel() {
+    init {
+        viewModelScope.launch { memeThumbnailRepository.scheduleMissing() }
+    }
+
     val memes =
         observeMemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val albums =
@@ -77,8 +90,21 @@ class LibraryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val tags = detailsRepository.observeTags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val indexingStatuses = mediaIndexingRepository.observeStatuses()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    val indexingRuns = mediaIndexingRepository.observeRuns()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val indexingProgress = indexingRuns.map { runs ->
+        MediaIndexingProgress.from(runs.filter { it.isActive })
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val indexingQueuePaused = mediaIndexingRepository.observeQueuePaused()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    private val _manualIndexingInProgress = MutableStateFlow(false)
+    val manualIndexingInProgress = _manualIndexingInProgress.asStateFlow()
     private val _edit = MutableStateFlow<EditState?>(null)
     val edit = _edit.asStateFlow()
+    private val _indexingFailure = MutableStateFlow<IndexingFailureState?>(null)
+    val indexingFailure = _indexingFailure.asStateFlow()
     private val _deleteError = MutableStateFlow(false)
     val deleteError = _deleteError.asStateFlow()
     private val _albumCreationError = MutableStateFlow<AlbumNameError?>(null)
@@ -132,7 +158,7 @@ class LibraryViewModel @Inject constructor(
             try {
                 saveDetails(current.memeId, MemeDetails(current.description, current.tags))
                 _edit.update { if (it?.memeId == current.memeId) null else it }
-                launch { searchRepository.indexMeme(current.memeId) }
+                launch { mediaIndexingRepository.enqueue(current.memeId) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -142,6 +168,65 @@ class LibraryViewModel @Inject constructor(
                         error = true
                     ) else it
                 }
+            }
+        }
+    }
+
+    fun scheduleManualIndexing(onlyFailed: Boolean, onScheduled: (Int) -> Unit) {
+        if (_manualIndexingInProgress.value) return
+        _manualIndexingInProgress.value = true
+        viewModelScope.launch {
+            try {
+                val count = if (onlyFailed) {
+                    mediaIndexingRepository.retryFailed()
+                } else {
+                    mediaIndexingRepository.reprocessAll()
+                }
+                onScheduled(count)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppLogger.app { "media_indexing.manual_schedule.failed type=${error.javaClass.simpleName}" }
+            } finally {
+                _manualIndexingInProgress.value = false
+            }
+        }
+    }
+
+    fun pauseIndexingQueue() {
+        viewModelScope.launch {
+            mediaIndexingRepository.pauseQueue()
+        }
+    }
+
+    fun resumeIndexingQueue() {
+        viewModelScope.launch {
+            mediaIndexingRepository.resumeQueue()
+        }
+    }
+
+    fun cancelIndexingQueue() {
+        viewModelScope.launch {
+            mediaIndexingRepository.cancelQueue()
+        }
+    }
+
+    fun openIndexingFailure(memeId: Long) {
+        viewModelScope.launch {
+            val reason = mediaIndexingRepository.failureReason(memeId) ?: return@launch
+            _indexingFailure.value = IndexingFailureState(memeId, reason)
+        }
+    }
+
+    fun dismissIndexingFailure() {
+        _indexingFailure.value = null
+    }
+
+    fun retryIndexingFailure() {
+        val failure = _indexingFailure.value ?: return
+        viewModelScope.launch {
+            if (mediaIndexingRepository.retryFailed(failure.memeId)) {
+                _indexingFailure.value = null
             }
         }
     }
