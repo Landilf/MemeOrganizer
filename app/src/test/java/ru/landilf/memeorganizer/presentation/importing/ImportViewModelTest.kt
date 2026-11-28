@@ -49,6 +49,7 @@ class ImportViewModelTest {
         override suspend fun resumePending() = Unit
         override suspend fun pauseQueue() = Unit
         override suspend fun resumeQueue() = Unit
+        override suspend fun cancelQueue() = Unit
         override suspend fun retryFailed() = 0
         override suspend fun retryFailed(memeId: Long) = false
         override suspend fun failureReason(memeId: Long): String? = null

@@ -34,10 +34,13 @@ import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.History
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material3.*
 import androidx.compose.ui.res.stringResource
 import androidx.annotation.StringRes
@@ -51,6 +54,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
@@ -61,11 +65,14 @@ import androidx.navigation.navArgument
 import ru.landilf.memeorganizer.BuildConfig
 import ru.landilf.memeorganizer.presentation.theme.MemeOrganizerTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
 import ru.landilf.memeorganizer.presentation.common.MediaIndexingBadge
 import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
+import ru.landilf.memeorganizer.presentation.common.AnimatedDropdownMenu
+import ru.landilf.memeorganizer.presentation.common.DROPDOWN_MENU_ANIMATION_DURATION_MILLIS
 import ru.landilf.memeorganizer.presentation.importing.ImportSummary
 import ru.landilf.memeorganizer.presentation.importing.asText
 import ru.landilf.memeorganizer.presentation.importing.ImportScreen
@@ -117,7 +124,7 @@ private const val RECENT_ALBUM_PERIOD_MILLIS = 30L * 24 * 60 * 60 * 1_000
 
 private fun List<Meme>.sortedByPreference(
     sort: LibrarySort,
-    direction: SortDirection?
+    direction: SortDirection
 ): List<Meme> {
     val defaultOrder = when (sort) {
         LibrarySort.AddedAt -> sortedWith(
@@ -149,9 +156,37 @@ private val LibrarySort.label: Int
         LibrarySort.MediaType -> R.string.library_sort_media_type
     }
 
-private fun SortDirection?.next(): SortDirection = when (this) {
-    null, SortDirection.Ascending -> SortDirection.Descending
+private fun SortDirection.next(): SortDirection = when (this) {
+    SortDirection.Ascending -> SortDirection.Descending
     SortDirection.Descending -> SortDirection.Ascending
+}
+
+@Composable
+private fun SortDirectionIcon(
+    direction: SortDirection,
+    onRotationFinished: () -> Unit
+) {
+    var previousDirection by remember { mutableStateOf(direction) }
+    val rotationDegrees = remember {
+        Animatable(if (direction == SortDirection.Descending) 0f else 180f)
+    }
+
+    LaunchedEffect(direction) {
+        if (direction != previousDirection) {
+            previousDirection = direction
+            rotationDegrees.animateTo(
+                targetValue = rotationDegrees.value + 180f,
+                animationSpec = tween(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS)
+            )
+            onRotationFinished()
+        }
+    }
+
+    Icon(
+        imageVector = Icons.Default.ArrowDownward,
+        contentDescription = null,
+        modifier = Modifier.graphicsLayer { rotationZ = rotationDegrees.value }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -485,6 +520,7 @@ private fun MainTabsScreen(
     val snackbar = remember { SnackbarHostState() }
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var sortMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    var sortMenuCloseAfterSelection by remember { mutableStateOf<LibrarySort?>(null) }
     var openedId by rememberSaveable { mutableStateOf<Long?>(null) }
     var openedFromFavorites by rememberSaveable { mutableStateOf(false) }
     var openedFromAlbum by rememberSaveable { mutableStateOf(false) }
@@ -503,6 +539,15 @@ private fun MainTabsScreen(
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
     val indexingFailure by libraryViewModel.indexingFailure.collectAsStateWithLifecycle()
     val albumCreationError by libraryViewModel.albumCreationError.collectAsStateWithLifecycle()
+
+    LaunchedEffect(sortMenuCloseAfterSelection, appSettings.librarySort) {
+        val selectedSort = sortMenuCloseAfterSelection
+        if (selectedSort != null && selectedSort == appSettings.librarySort) {
+            delay(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS.toLong())
+            sortMenuExpanded = false
+            sortMenuCloseAfterSelection = null
+        }
+    }
     val albumRenameError by libraryViewModel.albumRenameError.collectAsStateWithLifecycle()
     val albumMemes by libraryViewModel.albumMemes.collectAsStateWithLifecycle()
     val openedAlbum = albums.firstOrNull { it.id == openedAlbumId }
@@ -828,9 +873,12 @@ private fun MainTabsScreen(
                                     contentDescription = stringResource(R.string.library_sort)
                                 )
                             }
-                            DropdownMenu(
+                            AnimatedDropdownMenu(
                                 expanded = sortMenuExpanded,
-                                onDismissRequest = { sortMenuExpanded = false }
+                                onDismissRequest = {
+                                    sortMenuExpanded = false
+                                    sortMenuCloseAfterSelection = null
+                                }
                             ) {
                                 LibrarySort.entries.forEach { sort ->
                                     DropdownMenuItem(
@@ -840,7 +888,11 @@ private fun MainTabsScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
                                                 Box(Modifier.size(24.dp)) {
-                                                    if (sort == appSettings.librarySort) {
+                                                    androidx.compose.animation.AnimatedVisibility(
+                                                        visible = sort == appSettings.librarySort,
+                                                        enter = fadeIn(tween(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS)),
+                                                        exit = fadeOut(tween(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS))
+                                                    ) {
                                                         Icon(
                                                             Icons.Default.Check,
                                                             contentDescription = null
@@ -848,32 +900,30 @@ private fun MainTabsScreen(
                                                     }
                                                 }
                                                 Box(Modifier.size(24.dp)) {
-                                                    if (sort == appSettings.librarySort) {
-                                                        when (appSettings.librarySortDirection) {
-                                                            null -> Unit
-                                                            SortDirection.Descending -> Icon(
-                                                                Icons.Default.ArrowDownward,
-                                                                contentDescription = null
-                                                            )
-                                                            SortDirection.Ascending -> Icon(
-                                                                Icons.Default.ArrowUpward,
-                                                                contentDescription = null
-                                                            )
-                                                        }
+                                                    androidx.compose.animation.AnimatedVisibility(
+                                                        visible = sort == appSettings.librarySort,
+                                                        enter = fadeIn(tween(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS)),
+                                                        exit = fadeOut(tween(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS))
+                                                    ) {
+                                                        SortDirectionIcon(
+                                                            direction = appSettings.librarySortDirection,
+                                                            onRotationFinished = {
+                                                                sortMenuExpanded = false
+                                                            }
+                                                        )
                                                     }
                                                 }
                                                 Text(stringResource(sort.label))
                                             }
                                         },
                                         onClick = {
-                                            sortMenuExpanded = false
                                             if (sort == appSettings.librarySort) {
                                                 onLibrarySortDirectionSelected(
                                                     appSettings.librarySortDirection.next()
                                                 )
                                             } else {
+                                                sortMenuCloseAfterSelection = sort
                                                 onLibrarySortSelected(sort)
-                                                onLibrarySortDirectionSelected(SortDirection.Descending)
                                             }
                                         }
                                     )
@@ -969,7 +1019,7 @@ private fun MainTabsScreen(
                     FloatingActionButton(onClick = {
                         menuExpanded = !menuExpanded
                     }) { Icon(Icons.Default.Add, stringResource(R.string.library_add)) }
-                    DropdownMenu(
+                    AnimatedDropdownMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false }) {
                         DropdownMenuItem(
@@ -977,18 +1027,24 @@ private fun MainTabsScreen(
                             leadingIcon = { Icon(Icons.Default.PhotoLibrary, null) },
                             onClick = {
                                 menuExpanded = false
-                                galleryPicker.launch(
-                                    PickVisualMediaRequest(
-                                        ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                                scope.launch {
+                                    delay(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS.toLong())
+                                    galleryPicker.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageAndVideo
+                                        )
                                     )
-                                )
+                                }
                             })
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.library_import_files)) },
                             leadingIcon = { Icon(Icons.Default.FolderOpen, null) },
                             onClick = {
                                 menuExpanded = false
-                                filePicker.launch(arrayOf("image/*", "video/*"))
+                                scope.launch {
+                                    delay(DROPDOWN_MENU_ANIMATION_DURATION_MILLIS.toLong())
+                                    filePicker.launch(arrayOf("image/*", "video/*"))
+                                }
                             })
                     }
                 }
