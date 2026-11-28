@@ -6,13 +6,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
+import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
 
 @Composable
 fun LibraryBackupSection(viewModel: LibraryBackupViewModel) {
@@ -40,22 +39,16 @@ fun LibraryBackupSection(viewModel: LibraryBackupViewModel) {
     }
 
     if (restoreSource != null) {
-        AlertDialog(
-            onDismissRequest = { restoreSource = null },
-            title = { Text(stringResource(R.string.settings_restore_library_title)) },
-            text = { Text(stringResource(R.string.settings_restore_library_confirmation)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val source = restoreSource ?: return@TextButton
+        ConfirmationDialog(
+            title = R.string.settings_restore_library_title,
+            message = R.string.settings_restore_library_confirmation,
+            onConfirm = {
+                restoreSource?.let { source ->
                     restoreSource = null
                     viewModel.restore(source)
-                }) { Text(stringResource(R.string.yes_button)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { restoreSource = null }) {
-                    Text(stringResource(R.string.no_button))
                 }
-            }
+            },
+            onDismiss = { restoreSource = null }
         )
     }
 

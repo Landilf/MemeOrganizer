@@ -11,11 +11,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import ru.landilf.memeorganizer.core.logging.AppLogger
+import ru.landilf.memeorganizer.data.logging.IndexingEventLogger
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingRunDao
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
+import ru.landilf.memeorganizer.domain.model.ml.AsrIndexingMetrics
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 
 private const val MAX_FAILURE_MESSAGE_LENGTH = 200
@@ -59,10 +61,13 @@ class MediaIndexingWorker(
             )
         )
         notifyRunProgress(dependencies.indexingNotifier(), indexingRunDao, runId)
+        var asrMetrics: AsrIndexingMetrics? = null
+        var textIndexingStarted = false
         return try {
             dependencies.ocrMediaProcessor().process(meme, modelPackage)
-            dependencies.asrMediaProcessor().process(meme, modelPackage)
-            dependencies.searchRepository().indexMeme(memeId)
+            asrMetrics = dependencies.asrMediaProcessor().process(meme, modelPackage)
+            textIndexingStarted = true
+            dependencies.searchRepository().indexMeme(memeId, asrMetrics)
             if (indexingDao.getByMemeId(memeId)?.runId != runId) return Result.success()
             val finishedAtMillis = System.currentTimeMillis()
             indexingDao.upsert(
@@ -107,6 +112,18 @@ class MediaIndexingWorker(
             throw error
         } catch (error: Exception) {
             if (indexingDao.getByMemeId(memeId)?.runId != runId) return Result.success()
+            if (!textIndexingStarted) {
+                dependencies.indexingEventLogger().record(
+                    memeId = memeId,
+                    modelPackage = modelPackage,
+                    textEncoderMs = null,
+                    databaseWriteMs = null,
+                    totalMs = System.currentTimeMillis() - startedAtMillis,
+                    status = "failed",
+                    errorType = error.javaClass.simpleName,
+                    asrMetrics = asrMetrics
+                )
+            }
             val attempts = runAttemptCount + 1
             val finalFailure = attempts >= MAX_ATTEMPTS
             val finishedAtMillis = System.currentTimeMillis()
@@ -184,4 +201,5 @@ interface MediaIndexingWorkerEntryPoint {
     fun queueController(): IndexingQueueController
     fun ocrMediaProcessor(): OcrMediaProcessor
     fun asrMediaProcessor(): AsrMediaProcessor
+    fun indexingEventLogger(): IndexingEventLogger
 }

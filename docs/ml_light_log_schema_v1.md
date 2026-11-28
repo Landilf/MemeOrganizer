@@ -174,7 +174,56 @@ val tb = minOf(
 
 ## Индексация
 
-Для обработки одного мема записывается `indexing_event`. В `model_latency_ms` фиксируется время каждого реально вызванного компонента: `text_encoder`, `visual_encoder`, `ocr_engine`, `asr_engine`, `reranker`. Дополнительно фиксируются `database_write_ms` и `total_ms`.
+Для каждой попытки обработки одного мема записывается `indexing_event`, включая ошибку OCR/ASR до запуска текстового индексатора. В `model_latency_ms` фиксируется время каждого реально вызванного компонента: `text_encoder`, `visual_encoder`, `ocr_engine`, `asr_engine`, `reranker`. Дополнительно сохраняются `database_write_ms` и `total_ms`.
+
+Для ASR событие содержит три согласованных набора данных:
+
+- `step_latency_ms.extract_media`, `step_latency_ms.asr`, `step_latency_ms.text_encode` — время декодирования аудио, инференса ASR и построения текстового эмбеддинга;
+- `stats.asr_audio_chunks`, `stats.asr_text_chunks`, `stats.asr_characters` — объём обработанных данных;
+- `asr` — расширенная диагностика: доступность runtime, наличие дорожки, отдельные задержки, количество чанков и символов.
+
+Если этап не запускался, его время и статистика записываются как `null`, а не как ноль. Для видео без аудиодорожки `asr.runtime_available=true`, `asr.audio_track_found=false`, количество чанков равно `0`.
+
+```json lines
+{
+  "schema_version": 1,
+  "record_type": "indexing_event",
+  "file_hash": "sha256…",
+  "model_release_tag": "v0.3.8-mobile",
+  "media_type": "video",
+  "stats": {
+    "asr_audio_chunks": 3,
+    "asr_text_chunks": 3,
+    "asr_characters": 54
+  },
+  "step_latency_ms": {
+    "extract_media": 182,
+    "asr": 846,
+    "text_encode": 31
+  },
+  "model_latency_ms": {
+    "text_encoder": 31,
+    "visual_encoder": null,
+    "ocr_engine": null,
+    "asr_engine": 846,
+    "reranker": null
+  },
+  "asr": {
+    "runtime_available": true,
+    "audio_track_found": true,
+    "audio_decode_ms": 182,
+    "inference_ms": 846,
+    "audio_chunk_count": 3,
+    "text_chunk_count": 3,
+    "text_character_count": 54,
+    "total_ms": 1094
+  },
+  "database_write_ms": 4,
+  "total_ms": 1129,
+  "status": "done",
+  "error_type": null
+}
+```
 
 ## Импорт и ручная разметка
 

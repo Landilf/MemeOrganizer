@@ -18,7 +18,10 @@ internal class VideoAudioChunkExtractor {
     suspend fun extract(
         file: File,
         onChunk: suspend (AudioPcmChunk) -> Unit
-    ): Boolean = withContext(Dispatchers.Default) {
+    ): AudioExtractionResult = withContext(Dispatchers.Default) {
+        val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
+        var callbackNanos = 0L
+        var audioChunkCount = 0
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
         var decoderStarted = false
@@ -26,7 +29,11 @@ internal class VideoAudioChunkExtractor {
             extractor.setDataSource(file.absolutePath)
             val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
                 extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith(AUDIO_MIME_PREFIX) == true
-            } ?: return@withContext false
+            } ?: return@withContext AudioExtractionResult(
+                audioTrackFound = false,
+                audioChunkCount = 0,
+                decodeMs = elapsedMs(startedAt)
+            )
             val inputFormat = extractor.getTrackFormat(trackIndex)
             val mimeType = requireNotNull(inputFormat.getString(MediaFormat.KEY_MIME))
             extractor.selectTrack(trackIndex)
@@ -36,8 +43,21 @@ internal class VideoAudioChunkExtractor {
                 decoderStarted = true
             }
             decoder = configuredDecoder
-            decodeTrack(extractor, configuredDecoder, inputFormat, onChunk)
-            true
+            decodeTrack(extractor, configuredDecoder, inputFormat) { chunk ->
+                val callbackStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
+                try {
+                    onChunk(chunk)
+                    audioChunkCount++
+                } finally {
+                    callbackNanos += android.os.SystemClock.elapsedRealtimeNanos() - callbackStartedAt
+                }
+            }
+            AudioExtractionResult(
+                audioTrackFound = true,
+                audioChunkCount = audioChunkCount,
+                decodeMs = ((android.os.SystemClock.elapsedRealtimeNanos() - startedAt - callbackNanos) /
+                    NANOS_PER_MILLISECOND).coerceAtLeast(0)
+            )
         } finally {
             if (decoderStarted) runCatching { decoder?.stop() }
             decoder?.release()
@@ -157,5 +177,9 @@ internal class VideoAudioChunkExtractor {
         const val PCM_16_BYTES = 2
         const val PCM_FLOAT_BYTES = 4
         const val PCM_16_SCALE = 32_768f
+        const val NANOS_PER_MILLISECOND = 1_000_000L
     }
+
+    private fun elapsedMs(startedAt: Long): Long =
+        (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / NANOS_PER_MILLISECOND
 }

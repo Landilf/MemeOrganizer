@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.BuildConfig
+import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,21 +85,14 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
         )
     }) { padding ->
         if (clearConfirmationVisible) {
-            AlertDialog(
-                onDismissRequest = { clearConfirmationVisible = false },
-                title = { Text(stringResource(R.string.developer_clear_logs_title)) },
-                text = { Text(stringResource(R.string.developer_clear_logs_message)) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        clearConfirmationVisible = false
-                        viewModel.clearLogs()
-                    }) { Text(stringResource(R.string.yes_button)) }
+            ConfirmationDialog(
+                title = R.string.developer_clear_logs_title,
+                message = R.string.developer_clear_logs_message,
+                onConfirm = {
+                    clearConfirmationVisible = false
+                    viewModel.clearLogs()
                 },
-                dismissButton = {
-                    TextButton(onClick = {
-                        clearConfirmationVisible = false
-                    }) { Text(stringResource(R.string.no_button)) }
-                }
+                onDismiss = { clearConfirmationVisible = false }
             )
         }
         if (failurePickerVisible) {

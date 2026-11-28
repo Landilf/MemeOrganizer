@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.core.logging.LightLogStore
+import ru.landilf.memeorganizer.data.logging.IndexingEventLogger
 import ru.landilf.memeorganizer.data.ml.TextEmbeddingEngine
 import ru.landilf.memeorganizer.data.ml.TextModelPackage
 import ru.landilf.memeorganizer.data.search.EmbeddingCodec
@@ -23,6 +24,7 @@ import ru.landilf.memeorganizer.data.storage.entities.search.ExtractedTextChunkE
 import ru.landilf.memeorganizer.data.storage.mappers.meme.MemeStorageMapper
 import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.model.search.SearchPreparation
+import ru.landilf.memeorganizer.domain.model.ml.AsrIndexingMetrics
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 import java.security.MessageDigest
 import java.util.UUID
@@ -47,7 +49,8 @@ class MemeSearchRepositoryImpl @Inject constructor(
     private val embeddingDao: TextEmbeddingDao,
     private val extractedTextChunkDao: ExtractedTextChunkDao,
     private val mapper: MemeStorageMapper,
-    private val lightLog: LightLogStore
+    private val lightLog: LightLogStore,
+    private val indexingEventLogger: IndexingEventLogger
 ) : MemeSearchRepository {
     override suspend fun prepare(): SearchPreparation = withContext(Dispatchers.IO) {
         // Indexing is scheduled through WorkManager. Opening search must never synchronously load
@@ -63,11 +66,18 @@ class MemeSearchRepositoryImpl @Inject constructor(
         SearchPreparation(true, indexDocuments(modelPackage, documents, force = true))
     }
 
-    override suspend fun indexMeme(memeId: Long): Unit = withContext(Dispatchers.IO) {
+    override suspend fun indexMeme(
+        memeId: Long,
+        asrMetrics: AsrIndexingMetrics?
+    ): Unit = withContext(Dispatchers.IO) {
         val modelPackage = installer.activePackage() ?: return@withContext
         val document = searchDocuments().firstOrNull { it.memeId == memeId } ?: return@withContext
         AppLogger.ml { "index.single meme_id=$memeId" }
-        indexDocuments(modelPackage, listOf(document))
+        indexDocuments(
+            modelPackage = modelPackage,
+            documents = listOf(document),
+            asrMetricsByMeme = mapOf(memeId to asrMetrics)
+        )
     }
 
     override suspend fun search(query: String): List<MemeSearchResult> =
@@ -255,7 +265,8 @@ class MemeSearchRepositoryImpl @Inject constructor(
     private suspend fun indexDocuments(
         modelPackage: TextModelPackage,
         documents: List<SearchDocument>,
-        force: Boolean = false
+        force: Boolean = false,
+        asrMetricsByMeme: Map<Long, AsrIndexingMetrics?> = emptyMap()
     ): Int {
         val pending = documents.filter { document ->
             val text = documentText(document)
@@ -270,6 +281,19 @@ class MemeSearchRepositoryImpl @Inject constructor(
             .forEach { embeddingDao.deleteByMemeId(it.memeId) }
         if (pending.isEmpty()) {
             AppLogger.ml { "index.skip documents=${documents.size}" }
+            asrMetricsByMeme.forEach { (memeId, asrMetrics) ->
+                if (asrMetrics != null) {
+                    indexingEventLogger.record(
+                        memeId = memeId,
+                        modelPackage = modelPackage,
+                        textEncoderMs = null,
+                        databaseWriteMs = null,
+                        totalMs = asrMetrics.totalMs ?: 0,
+                        status = "done",
+                        asrMetrics = asrMetrics
+                    )
+                }
+            }
             return 0
         }
         val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
@@ -295,25 +319,27 @@ class MemeSearchRepositoryImpl @Inject constructor(
                         )
                     )
                     databaseWriteMs = elapsedMs(databaseStartedAt)
-                    recordIndexingEvent(
+                    indexingEventLogger.record(
                         memeId = document.memeId,
                         modelPackage = modelPackage,
-                        modelMs = modelMs,
+                        textEncoderMs = modelMs,
                         databaseWriteMs = databaseWriteMs,
                         totalMs = elapsedMs(itemStartedAt),
-                        status = "done"
+                        status = "done",
+                        asrMetrics = asrMetricsByMeme[document.memeId]
                     )
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    recordIndexingEvent(
+                    indexingEventLogger.record(
                         memeId = document.memeId,
                         modelPackage = modelPackage,
-                        modelMs = modelMs,
+                        textEncoderMs = modelMs,
                         databaseWriteMs = databaseWriteMs,
                         totalMs = elapsedMs(itemStartedAt),
                         status = "failed",
-                        errorType = error.javaClass.simpleName
+                        errorType = error.javaClass.simpleName,
+                        asrMetrics = asrMetricsByMeme[document.memeId]
                     )
                     throw error
                 }
@@ -499,35 +525,6 @@ class MemeSearchRepositoryImpl @Inject constructor(
         .put("passed_by_bm25", decision.passedByBm25)
         .put("passed_by_exact_tag", decision.passedByExactTag)
         .put("passed_relevance_filter", decision.passed)
-
-    private suspend fun recordIndexingEvent(
-        memeId: Long,
-        modelPackage: TextModelPackage,
-        modelMs: Long?,
-        databaseWriteMs: Long?,
-        totalMs: Long,
-        status: String,
-        errorType: String? = null
-    ) {
-        val meme = memeDao.getById(memeId) ?: return
-        lightLog.record(
-            "indexing_event",
-            JSONObject()
-                .put("file_hash", meme.contentHash)
-                .put("model_release_tag", modelPackage.releaseTag)
-                .put(
-                    "model_latency_ms", JSONObject()
-                        .put("text_encoder", modelMs ?: JSONObject.NULL)
-                        .put("visual_encoder", JSONObject.NULL)
-                        .put("ocr_engine", JSONObject.NULL)
-                        .put("asr_engine", JSONObject.NULL)
-                )
-                .put("database_write_ms", databaseWriteMs ?: JSONObject.NULL)
-                .put("total_ms", totalMs)
-                .put("status", status)
-                .put("error_type", errorType ?: JSONObject.NULL)
-        )
-    }
 
     private fun fingerprint(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }

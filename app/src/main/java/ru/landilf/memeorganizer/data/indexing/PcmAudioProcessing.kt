@@ -5,6 +5,12 @@ internal data class AudioPcmChunk(
     val samples: FloatArray
 )
 
+internal data class AudioExtractionResult(
+    val audioTrackFound: Boolean,
+    val audioChunkCount: Int,
+    val decodeMs: Long
+)
+
 /**
  * Converts interleaved decoded PCM frames to a mono 16 kHz stream. Nearest-neighbour resampling
  * keeps this lightweight; feature extraction and normalisation stay inside sherpa-onnx.

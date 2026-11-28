@@ -14,11 +14,24 @@ fun ConfirmationDialog(
     @StringRes message: Int,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
+) = ConfirmationDialog(
+    title = { Text(stringResource(title)) },
+    message = { Text(stringResource(message)) },
+    onConfirm = onConfirm,
+    onDismiss = onDismiss
+)
+
+@Composable
+fun ConfirmationDialog(
+    title: @Composable () -> Unit,
+    message: @Composable () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(title)) },
-        text = { Text(stringResource(message)) },
+        title = title,
+        text = message,
         dismissButton = {
             TextButton(onClick = onConfirm) {
                 Text(stringResource(R.string.yes_button))

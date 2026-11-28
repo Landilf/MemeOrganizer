@@ -8,7 +8,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -17,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.landilf.memeorganizer.R
-import ru.landilf.memeorganizer.data.ml.ModelDownloadProgress
 import ru.landilf.memeorganizer.data.ml.ModelRelease
+import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
 
 @Composable
 fun DeveloperModelReleaseDialog(
@@ -31,7 +30,7 @@ fun DeveloperModelReleaseDialog(
     if (!state.visible) return
     val progress = state.progress
     if (progress != null) {
-        ModelReleaseProgressDialog(progress)
+        ModelDownloadProgressDialog(progress)
         return
     }
     val selectedRelease = state.selectedRelease
@@ -116,10 +115,9 @@ private fun ModelReleaseConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
+    ConfirmationDialog(
         title = { Text(stringResource(R.string.developer_model_release_confirm_title)) },
-        text = {
+        message = {
             Text(
                 stringResource(
                     R.string.developer_model_release_confirm_message,
@@ -128,58 +126,8 @@ private fun ModelReleaseConfirmationDialog(
                 )
             )
         },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(stringResource(R.string.yes_button)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.no_button)) }
-        }
-    )
-}
-
-@Composable
-private fun ModelReleaseProgressDialog(progress: ModelDownloadProgress) {
-    val fraction = when (progress) {
-        is ModelDownloadProgress.Downloading -> {
-            if (progress.totalBytes > 0) {
-                (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-        }
-
-        ModelDownloadProgress.Installing -> 1f
-    }
-    AlertDialog(
-        onDismissRequest = {},
-        title = { Text(stringResource(R.string.model_update_progress_title)) },
-        text = {
-            Column {
-                Text(
-                    stringResource(
-                        if (progress is ModelDownloadProgress.Downloading) {
-                            R.string.model_update_downloading
-                        } else {
-                            R.string.model_update_installing
-                        }
-                    )
-                )
-                LinearProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
-                )
-                if (progress is ModelDownloadProgress.Downloading) {
-                    Text(
-                        stringResource(
-                            R.string.model_update_progress_percent,
-                            (fraction * 100).toInt()
-                        ),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {}
+        onConfirm = onConfirm,
+        onDismiss = onDismiss
     )
 }
 

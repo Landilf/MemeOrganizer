@@ -65,6 +65,7 @@ import kotlinx.coroutines.flow.Flow
 import java.io.File
 import ru.landilf.memeorganizer.presentation.common.MediaThumbnail
 import ru.landilf.memeorganizer.presentation.common.MediaIndexingBadge
+import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
 import ru.landilf.memeorganizer.presentation.importing.ImportSummary
 import ru.landilf.memeorganizer.presentation.importing.asText
 import ru.landilf.memeorganizer.presentation.importing.ImportScreen
@@ -690,23 +691,16 @@ private fun MainTabsScreen(
         )
     }
     if (albumToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { albumDeleteId = null },
-            title = { Text(stringResource(R.string.albums_delete_title)) },
-            text = { Text(stringResource(R.string.albums_delete_message)) },
-            confirmButton = {
-                TextButton(onClick = { albumDeleteId = null }) {
-                    Text(stringResource(R.string.no_button))
+        ConfirmationDialog(
+            title = R.string.albums_delete_title,
+            message = R.string.albums_delete_message,
+            onConfirm = {
+                libraryViewModel.deleteAlbum(albumToDelete.id) {
+                    if (openedAlbumId == albumToDelete.id) openedAlbumId = null
+                    albumDeleteId = null
                 }
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    libraryViewModel.deleteAlbum(albumToDelete.id) {
-                        if (openedAlbumId == albumToDelete.id) openedAlbumId = null
-                        albumDeleteId = null
-                    }
-                }) { Text(stringResource(R.string.yes_button)) }
-            }
+            onDismiss = { albumDeleteId = null }
         )
     }
     manualIndexingOnlyFailed?.let { onlyFailed ->
