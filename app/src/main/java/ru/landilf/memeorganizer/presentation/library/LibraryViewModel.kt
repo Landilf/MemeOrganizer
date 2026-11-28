@@ -199,6 +199,12 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    fun cancelIndexingQueue() {
+        viewModelScope.launch {
+            mediaIndexingRepository.cancelQueue()
+        }
+    }
+
     fun openIndexingFailure(memeId: Long) {
         viewModelScope.launch {
             val reason = mediaIndexingRepository.failureReason(memeId) ?: return@launch

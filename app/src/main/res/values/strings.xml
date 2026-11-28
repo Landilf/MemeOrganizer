@@ -50,11 +50,15 @@
     <string name="indexing_progress_paused">Обработка приостановлена.</string>
     <string name="indexing_pause">Приостановить</string>
     <string name="indexing_resume">Продолжить</string>
+    <string name="indexing_cancel">Отменить обработку</string>
+    <string name="indexing_cancel_title">Отменить обработку?</string>
+    <string name="indexing_cancel_message">Текущий запуск будет остановлен. Незавершённые файлы не будут продолжены автоматически; их можно обработать повторно вручную.</string>
     <string name="indexing_failure_title">Ошибка обработки</string>
     <string name="indexing_failure_message">Последняя причина: %1$s</string>
     <string name="indexing_failure_retry">Повторить</string>
     <string name="indexing_history_running">Выполняется</string>
     <string name="indexing_history_completed">Завершено</string>
+    <string name="indexing_history_cancelled">Отменено</string>
     <string name="indexing_history_started">Начало: %1$s</string>
     <string name="indexing_history_result">Обработано: %1$d / %2$d, ошибок: %3$d</string>
     <string name="indexing_history_duration">Длительность: %1$s</string>
@@ -216,8 +220,6 @@
     <string name="developer_reindex_success">Переиндексация завершена: %1$d мем(ов) обработано.</string>
     <string name="developer_reindex_model_unavailable">Установите пакет модели, чтобы запустить переиндексацию.</string>
     <string name="developer_reindex_error">Не удалось переиндексировать библиотеку.</string>
-    <string name="developer_low_battery_title">Низкий заряд батареи</string>
-    <string name="developer_low_battery_message">Переиндексация может занять время и увеличить расход заряда. Запустить её сейчас?</string>
     <string name="developer_fusion_smoke_test">Проверить fusion-модель</string>
     <string name="developer_fusion_smoke_testing">Проверка fusion-модели…</string>
     <string name="developer_fusion_smoke_success">Fusion-модель прошла Smoke Test Pack.</string>
@@ -253,10 +255,6 @@
     <string name="indexing_notification_channel_name">Обработка мемов</string>
     <string name="indexing_notification_progress_title">Обработка мемов</string>
     <string name="indexing_notification_progress_message">Обработано: %1$d / %2$d</string>
-    <string name="indexing_notification_waiting_title">Обработка отложена</string>
-    <string name="indexing_notification_waiting_message">Задача продолжится, когда заряд батареи будет достаточным.</string>
-    <string name="indexing_notification_resumed_title">Обработка возобновлена</string>
-    <string name="indexing_notification_resumed_message">Заряд батареи достаточен, задача продолжает работу.</string>
     <string name="indexing_notification_completed_title">Обработка завершена</string>
     <string name="indexing_notification_completed_message">Доступный этап индексации мемов выполнен.</string>
     <string name="indexing_notification_failed_title">Обработка не завершена</string>

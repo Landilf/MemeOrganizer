@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.domain.model.album.Album
+import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
 
 @Composable
 fun AlbumNameDialog(
@@ -101,20 +102,9 @@ fun AlbumPickerDialog(
 fun DeleteMemesConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.library_delete_title)) },
-        text = { Text(stringResource(R.string.library_delete_message)) },
-        dismissButton = {
-            TextButton(onClick = onConfirm) {
-                Text(stringResource(R.string.yes_button))
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.no_button))
-            }
-        }
-    )
-}
+) = ConfirmationDialog(
+    title = R.string.library_delete_title,
+    message = R.string.library_delete_message,
+    onConfirm = onConfirm,
+    onDismiss = onDismiss
+)

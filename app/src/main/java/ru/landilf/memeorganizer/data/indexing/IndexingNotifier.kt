@@ -53,16 +53,6 @@ class IndexingNotifier @Inject constructor(@param:ApplicationContext private val
         NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
     }
 
-    fun waitingForBattery() = show(
-        title = context.getString(R.string.indexing_notification_waiting_title),
-        text = context.getString(R.string.indexing_notification_waiting_message)
-    )
-
-    fun resumed() = show(
-        title = context.getString(R.string.indexing_notification_resumed_title),
-        text = context.getString(R.string.indexing_notification_resumed_message)
-    )
-
     fun completed() = show(
         title = context.getString(R.string.indexing_notification_completed_title),
         text = context.getString(R.string.indexing_notification_completed_message)

@@ -218,6 +218,7 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                     queuePaused = queuePaused,
                     onPauseQueue = libraryViewModel::pauseIndexingQueue,
                     onResumeQueue = libraryViewModel::resumeIndexingQueue,
+                    onCancelQueue = libraryViewModel::cancelIndexingQueue,
                     onBack = { navController.popBackStack() }
                 )
             }

@@ -20,6 +20,9 @@ interface MediaIndexingRepository {
     /** Resumes all pending items in the current queue. */
     suspend fun resumeQueue()
 
+    /** Cancels active work and closes its run without scheduling unfinished items again. */
+    suspend fun cancelQueue()
+
     /** Schedules only items whose last background attempt failed. */
     suspend fun retryFailed(): Int
 

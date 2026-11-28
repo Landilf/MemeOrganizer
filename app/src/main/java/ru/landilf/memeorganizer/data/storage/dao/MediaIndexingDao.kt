@@ -41,6 +41,25 @@ interface MediaIndexingDao {
         updatedAtMillis: Long
     )
 
+    @Query(
+        """
+        UPDATE media_indexing
+        SET status = :pendingStatus,
+            lastError = :reason,
+            runId = NULL,
+            processingStartedAtMillis = NULL,
+            updatedAtMillis = :updatedAtMillis
+        WHERE runId IN (
+            SELECT id FROM media_indexing_runs WHERE finishedAtMillis IS NULL
+        )
+        """
+    )
+    suspend fun cancelActiveRuns(
+        pendingStatus: String,
+        reason: String,
+        updatedAtMillis: Long
+    )
+
     @Query("DELETE FROM media_indexing WHERE memeId = :memeId")
     suspend fun deleteByMemeId(memeId: Long)
 }

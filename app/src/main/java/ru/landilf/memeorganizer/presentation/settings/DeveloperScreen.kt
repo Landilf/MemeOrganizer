@@ -48,7 +48,6 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val reindexedCount by viewModel.reindexedCount.collectAsStateWithLifecycle()
     val memes by viewModel.memes.collectAsStateWithLifecycle()
-    val lowBatteryConfirmationRequired by viewModel.lowBatteryConfirmationRequired.collectAsStateWithLifecycle()
     val modelReleaseState by viewModel.modelReleaseState.collectAsStateWithLifecycle()
     var includeMedia by rememberSaveable { mutableStateOf(true) }
     var clearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
@@ -99,23 +98,6 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                     TextButton(onClick = {
                         clearConfirmationVisible = false
                     }) { Text(stringResource(R.string.no_button)) }
-                }
-            )
-        }
-        if (lowBatteryConfirmationRequired) {
-            AlertDialog(
-                onDismissRequest = viewModel::dismissLowBatteryConfirmation,
-                title = { Text(stringResource(R.string.developer_low_battery_title)) },
-                text = { Text(stringResource(R.string.developer_low_battery_message)) },
-                confirmButton = {
-                    TextButton(onClick = viewModel::confirmReindexAtLowBattery) {
-                        Text(stringResource(R.string.yes_button))
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = viewModel::dismissLowBatteryConfirmation) {
-                        Text(stringResource(R.string.no_button))
-                    }
                 }
             )
         }

@@ -62,18 +62,23 @@ class SherpaAsrEngine private constructor(
                 if (component.runtime != SHERPA_RUNTIME) return@withContext null
                 val tokens = component.auxiliaryFiles[TOKENS_PATH] ?: return@withContext null
                 val startedAt = android.os.SystemClock.elapsedRealtimeNanos()
-                val recognizer = OfflineRecognizer(
-                    config = OfflineRecognizerConfig(
-                        modelConfig = OfflineModelConfig(
-                            nemo = OfflineNemoEncDecCtcModelConfig(
-                                model = component.modelFile.absolutePath
-                            ),
-                            tokens = tokens.absolutePath,
-                            numThreads = THREAD_COUNT,
-                            provider = "cpu"
+                val recognizer = try {
+                    OfflineRecognizer(
+                        config = OfflineRecognizerConfig(
+                            modelConfig = OfflineModelConfig(
+                                nemo = OfflineNemoEncDecCtcModelConfig(
+                                    model = component.modelFile.absolutePath
+                                ),
+                                tokens = tokens.absolutePath,
+                                numThreads = THREAD_COUNT,
+                                provider = "cpu"
+                            )
                         )
                     )
-                )
+                } catch (error: LinkageError) {
+                    AppLogger.mlError(error) { "asr.open.runtime_incompatible" }
+                    return@withContext null
+                }
                 SherpaAsrEngine(recognizer).also {
                     val elapsedMs =
                         (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000.0

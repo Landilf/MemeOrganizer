@@ -59,6 +59,21 @@ interface MediaIndexingRunDao {
 
     @Query(
         """
+        UPDATE media_indexing_runs
+        SET totalPausedDurationMillis = totalPausedDurationMillis + CASE
+                WHEN pausedAtMillis IS NULL THEN 0
+                ELSE :cancelledAtMillis - pausedAtMillis
+            END,
+            pausedAtMillis = NULL,
+            finishedAtMillis = :cancelledAtMillis,
+            cancelledAtMillis = :cancelledAtMillis
+        WHERE finishedAtMillis IS NULL
+        """
+    )
+    suspend fun cancelActive(cancelledAtMillis: Long)
+
+    @Query(
+        """
         DELETE FROM media_indexing_runs
         WHERE finishedAtMillis IS NOT NULL
             AND id NOT IN (

@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.core.logging.DebugLogExporter
-import ru.landilf.memeorganizer.data.device.BatteryStateChecker
 import ru.landilf.memeorganizer.data.ml.AsrSmokeTestResult
 import ru.landilf.memeorganizer.data.ml.AsrSmokeTestRunner
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestResult
@@ -82,7 +81,6 @@ class DeveloperViewModel @Inject constructor(
     private val ocrSmokeTestRunner: OcrSmokeTestRunner,
     private val asrSmokeTestRunner: AsrSmokeTestRunner,
     private val modelUpdater: GitHubModelUpdater,
-    private val batteryStateChecker: BatteryStateChecker,
     private val indexingNotifier: IndexingNotifier,
     observeMemes: ObserveMemesUseCase,
     private val mediaIndexingRepository: MediaIndexingRepository
@@ -91,8 +89,6 @@ class DeveloperViewModel @Inject constructor(
     val status = _status.asStateFlow()
     private val _reindexedCount = MutableStateFlow(0)
     val reindexedCount = _reindexedCount.asStateFlow()
-    private val _lowBatteryConfirmationRequired = MutableStateFlow(false)
-    val lowBatteryConfirmationRequired = _lowBatteryConfirmationRequired.asStateFlow()
     private val _modelReleaseState = MutableStateFlow(DeveloperModelReleaseUiState())
     val modelReleaseState = _modelReleaseState.asStateFlow()
     val memes = observeMemes()
@@ -141,21 +137,7 @@ class DeveloperViewModel @Inject constructor(
     }
 
     fun requestReindexAll() {
-        if (_status.value.isBusy()) return
-        if (batteryStateChecker.needsHeavyWorkConfirmation()) {
-            _lowBatteryConfirmationRequired.value = true
-        } else {
-            reindexAll()
-        }
-    }
-
-    fun confirmReindexAtLowBattery() {
-        _lowBatteryConfirmationRequired.value = false
         reindexAll()
-    }
-
-    fun dismissLowBatteryConfirmation() {
-        _lowBatteryConfirmationRequired.value = false
     }
 
     private fun reindexAll() {

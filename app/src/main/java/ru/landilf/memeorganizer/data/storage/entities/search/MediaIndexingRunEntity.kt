@@ -17,6 +17,7 @@ data class MediaIndexingRunEntity(
     val failedCount: Int = 0,
     val totalDurationMillis: Long = 0,
     val finishedAtMillis: Long? = null,
+    val cancelledAtMillis: Long? = null,
     val pausedAtMillis: Long? = null,
     @ColumnInfo(defaultValue = "0") val totalPausedDurationMillis: Long = 0
 )

@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -21,7 +22,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -29,6 +33,7 @@ import kotlinx.coroutines.delay
 import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingProgress
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingRun
+import ru.landilf.memeorganizer.presentation.common.ConfirmationDialog
 import java.text.DateFormat
 import java.util.Date
 
@@ -40,8 +45,21 @@ fun IndexingHistoryScreen(
     queuePaused: Boolean,
     onPauseQueue: () -> Unit,
     onResumeQueue: () -> Unit,
+    onCancelQueue: () -> Unit,
     onBack: () -> Unit
 ) {
+    var cancelConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    if (cancelConfirmationVisible) {
+        ConfirmationDialog(
+            title = R.string.indexing_cancel_title,
+            message = R.string.indexing_cancel_message,
+            onConfirm = {
+                cancelConfirmationVisible = false
+                onCancelQueue()
+            },
+            onDismiss = { cancelConfirmationVisible = false }
+        )
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,6 +97,7 @@ fun IndexingHistoryScreen(
                             queuePaused = queuePaused,
                             onPauseQueue = onPauseQueue,
                             onResumeQueue = onResumeQueue,
+                            onCancelQueue = { cancelConfirmationVisible = true },
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }
@@ -100,6 +119,7 @@ fun IndexingProgressCard(
     queuePaused: Boolean,
     onPauseQueue: () -> Unit,
     onResumeQueue: () -> Unit,
+    onCancelQueue: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val now by produceState(System.currentTimeMillis(), progress) {
@@ -159,6 +179,13 @@ fun IndexingProgressCard(
                     )
                 )
             }
+            OutlinedButton(
+                onClick = onCancelQueue,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(R.string.indexing_cancel)) }
         }
     }
 }
@@ -178,10 +205,15 @@ private fun IndexingRunCard(run: MediaIndexingRun, modifier: Modifier = Modifier
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
-                text = if (run.isActive) {
-                    stringResource(R.string.indexing_history_running)
-                } else {
-                    stringResource(R.string.indexing_history_completed)
+                text = when {
+                    run.isActive -> {
+                        stringResource(R.string.indexing_history_running)
+                    }
+
+                    run.isCancelled -> stringResource(R.string.indexing_history_cancelled)
+                    else -> {
+                        stringResource(R.string.indexing_history_completed)
+                    }
                 },
                 style = MaterialTheme.typography.titleMedium
             )

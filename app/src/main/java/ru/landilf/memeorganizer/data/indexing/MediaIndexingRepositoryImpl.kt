@@ -2,7 +2,6 @@ package ru.landilf.memeorganizer.data.indexing
 
 import android.content.Context
 import androidx.work.BackoffPolicy
-import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -20,7 +19,7 @@ import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingRunDao
 import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingEntity
 import ru.landilf.memeorganizer.data.storage.entities.search.MediaIndexingRunEntity
-import ru.landilf.memeorganizer.data.device.BatteryStateChecker
+import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingRun
 import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
@@ -31,7 +30,6 @@ class MediaIndexingRepositoryImpl @Inject constructor(
     private val indexingDao: MediaIndexingDao,
     private val indexingRunDao: MediaIndexingRunDao,
     private val memeDao: MemeDao,
-    private val batteryStateChecker: BatteryStateChecker,
     private val indexingNotifier: IndexingNotifier,
     private val queueController: IndexingQueueController
 ) : MediaIndexingRepository {
@@ -44,6 +42,7 @@ class MediaIndexingRepositoryImpl @Inject constructor(
     override suspend fun resumePending() {
         if (queueController.isPaused()) return
         val pending = indexingDao.getByStatus(MediaIndexingStatus.Pending.storageValue)
+            .filter { it.lastError != CANCELLED_REASON }
         pending.filter { it.runId != null }.forEach { item ->
             enqueueWork(item.memeId, requireNotNull(item.runId))
         }
@@ -107,12 +106,26 @@ class MediaIndexingRepositoryImpl @Inject constructor(
         resumePending()
     }
 
+    override suspend fun cancelQueue() = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        queueController.setPaused(false)
+        indexingDao.cancelActiveRuns(
+            pendingStatus = MediaIndexingStatus.Pending.storageValue,
+            reason = CANCELLED_REASON,
+            updatedAtMillis = now
+        )
+        indexingRunDao.cancelActive(now)
+        WorkManager.getInstance(context).cancelAllWorkByTag(INDEXING_WORK_TAG)
+        indexingNotifier.clearProgress()
+        indexingRunDao.pruneFinished(HISTORY_LIMIT)
+        AppLogger.ml { "media_indexing.cancelled" }
+    }
+
     override suspend fun reprocessAll(): Int = scheduleNewRun(memeDao.getAll().map { it.id })
 
     private suspend fun scheduleNewRun(memeIds: List<Long>): Int = withContext(Dispatchers.IO) {
         val distinctIds = memeIds.distinct()
         if (distinctIds.isEmpty()) return@withContext 0
-        val waitingForBattery = batteryStateChecker.needsHeavyWorkConfirmation()
         val updatedAtMillis = System.currentTimeMillis()
         val queuePaused = queueController.isPaused()
         val runId = indexingRunDao.insert(
@@ -128,16 +141,15 @@ class MediaIndexingRepositoryImpl @Inject constructor(
                     memeId = memeId,
                     status = MediaIndexingStatus.Pending.storageValue,
                     attemptCount = 0,
-                    lastError = if (waitingForBattery) BATTERY_LOW_REASON else null,
+                    lastError = null,
                     updatedAtMillis = updatedAtMillis,
                     runId = runId
                 )
             )
         }
-        if (!waitingForBattery && !queuePaused) {
+        if (!queuePaused) {
             indexingNotifier.showProgress(completedCount = 0, totalCount = distinctIds.size)
         }
-        if (waitingForBattery) indexingNotifier.waitingForBattery()
         if (!queuePaused) {
             distinctIds.forEach { memeId -> enqueueWork(memeId, runId) }
         }
@@ -164,6 +176,7 @@ class MediaIndexingRepositoryImpl @Inject constructor(
                     failedCount = run.failedCount,
                     totalDurationMillis = run.totalDurationMillis,
                     finishedAtMillis = run.finishedAtMillis,
+                    cancelledAtMillis = run.cancelledAtMillis,
                     pausedAtMillis = run.pausedAtMillis,
                     totalPausedDurationMillis = run.totalPausedDurationMillis
                 )
@@ -183,7 +196,6 @@ class MediaIndexingRepositoryImpl @Inject constructor(
                         MediaIndexingWorker.RUN_ID_KEY to runId
                     )
                 )
-                .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
                 .addTag(INDEXING_WORK_TAG)
                 .build()
@@ -192,8 +204,8 @@ class MediaIndexingRepositoryImpl @Inject constructor(
 
     companion object {
         fun workName(memeId: Long) = "media_indexing_$memeId"
-        const val BATTERY_LOW_REASON = "battery_low"
         const val PAUSED_REASON = "paused"
+        const val CANCELLED_REASON = "cancelled"
         const val INDEXING_WORK_TAG = "media_indexing"
         private const val DEBUG_FAILURE_ATTEMPTS = 3
         private const val DEBUG_FAILURE_REASON = "DebugFailure: simulated by developer"

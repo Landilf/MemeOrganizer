@@ -86,7 +86,8 @@ class DatabaseMigrationsTest {
                     DatabaseMigrations.MIGRATION_9_10,
                     DatabaseMigrations.MIGRATION_10_11,
                     DatabaseMigrations.MIGRATION_11_12,
-                    DatabaseMigrations.MIGRATION_12_13
+                    DatabaseMigrations.MIGRATION_12_13,
+                    DatabaseMigrations.MIGRATION_13_14
                 )
                 .build()
             try {
@@ -303,6 +304,20 @@ class DatabaseMigrationsTest {
                     }
                     assertTrue("pausedAtMillis" in names)
                     assertTrue("totalPausedDurationMillis" in names)
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion13AndAddsCancellationToIndexingRuns() {
+        helper.createDatabase(databaseName, 13).close()
+        helper.runMigrationsAndValidate(databaseName, 14, true, DatabaseMigrations.MIGRATION_13_14)
+            .use { database ->
+                database.query("PRAGMA table_info(media_indexing_runs)").use { cursor ->
+                    val names = buildSet {
+                        while (cursor.moveToNext()) add(cursor.getString(1))
+                    }
+                    assertTrue("cancelledAtMillis" in names)
                 }
             }
     }

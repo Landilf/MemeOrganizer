@@ -10,7 +10,6 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import ru.landilf.memeorganizer.data.device.BatteryStateChecker
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
@@ -50,9 +49,6 @@ class MediaIndexingWorker(
             AppLogger.ml { "media_indexing.waiting_for_model meme_id=$memeId" }
             return Result.success()
         }
-        val wasWaitingForBattery = current.lastError ==
-            MediaIndexingRepositoryImpl.BATTERY_LOW_REASON
-        if (wasWaitingForBattery) dependencies.indexingNotifier().resumed()
         val startedAtMillis = System.currentTimeMillis()
         indexingDao.upsert(
             current.copy(
@@ -65,6 +61,7 @@ class MediaIndexingWorker(
         notifyRunProgress(dependencies.indexingNotifier(), indexingRunDao, runId)
         return try {
             dependencies.ocrMediaProcessor().process(meme, modelPackage)
+            dependencies.asrMediaProcessor().process(meme, modelPackage)
             dependencies.searchRepository().indexMeme(memeId)
             if (indexingDao.getByMemeId(memeId)?.runId != runId) return Result.success()
             val finishedAtMillis = System.currentTimeMillis()
@@ -92,14 +89,8 @@ class MediaIndexingWorker(
             Result.success()
         } catch (error: CancellationException) {
             val isCurrentRun = indexingDao.getByMemeId(memeId)?.runId == runId
-            val waitingReason = when {
-                queueController.isPaused() -> MediaIndexingRepositoryImpl.PAUSED_REASON
-                dependencies.batteryStateChecker().needsHeavyWorkConfirmation() -> {
-                    MediaIndexingRepositoryImpl.BATTERY_LOW_REASON
-                }
-
-                else -> null
-            }
+            val waitingReason = MediaIndexingRepositoryImpl.PAUSED_REASON
+                .takeIf { queueController.isPaused() }
             if (isCurrentRun && waitingReason != null) {
                 withContext<Unit>(NonCancellable) {
                     indexingDao.upsert(
@@ -111,9 +102,6 @@ class MediaIndexingWorker(
                             processingStartedAtMillis = null
                         )
                     )
-                }
-                if (waitingReason == MediaIndexingRepositoryImpl.BATTERY_LOW_REASON) {
-                    dependencies.indexingNotifier().waitingForBattery()
                 }
             }
             throw error
@@ -192,8 +180,8 @@ interface MediaIndexingWorkerEntryPoint {
     fun indexingRunDao(): MediaIndexingRunDao
     fun modelInstaller(): LocalModelInstaller
     fun searchRepository(): MemeSearchRepository
-    fun batteryStateChecker(): BatteryStateChecker
     fun indexingNotifier(): IndexingNotifier
     fun queueController(): IndexingQueueController
     fun ocrMediaProcessor(): OcrMediaProcessor
+    fun asrMediaProcessor(): AsrMediaProcessor
 }

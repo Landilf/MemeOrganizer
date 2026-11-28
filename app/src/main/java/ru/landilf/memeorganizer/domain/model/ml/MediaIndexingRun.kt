@@ -8,11 +8,13 @@ data class MediaIndexingRun(
     val failedCount: Int,
     val totalDurationMillis: Long,
     val finishedAtMillis: Long?,
+    val cancelledAtMillis: Long? = null,
     val pausedAtMillis: Long? = null,
     val totalPausedDurationMillis: Long = 0
 ) {
     val processedCount: Int get() = completedCount + failedCount
     val isActive: Boolean get() = finishedAtMillis == null
+    val isCancelled: Boolean get() = cancelledAtMillis != null
     val averageItemDurationMillis: Long?
         get() = totalDurationMillis.takeIf { processedCount > 0 }?.div(processedCount)
 
