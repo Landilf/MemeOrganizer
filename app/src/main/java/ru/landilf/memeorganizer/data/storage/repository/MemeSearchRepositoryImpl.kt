@@ -17,7 +17,9 @@ import ru.landilf.memeorganizer.data.search.SimpleBm25
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.data.storage.dao.SearchDocumentRow
 import ru.landilf.memeorganizer.data.storage.dao.TextEmbeddingDao
+import ru.landilf.memeorganizer.data.storage.dao.ExtractedTextChunkDao
 import ru.landilf.memeorganizer.data.storage.entities.search.TextEmbeddingEntity
+import ru.landilf.memeorganizer.data.storage.entities.search.ExtractedTextChunkEntity
 import ru.landilf.memeorganizer.data.storage.mappers.meme.MemeStorageMapper
 import ru.landilf.memeorganizer.domain.model.search.MemeSearchResult
 import ru.landilf.memeorganizer.domain.model.search.SearchPreparation
@@ -29,11 +31,21 @@ import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
+private data class SearchDocument(
+    val row: SearchDocumentRow,
+    val extractedChunks: List<ExtractedTextChunkEntity>
+) {
+    val memeId: Long get() = row.memeId
+    val description: String get() = row.description
+    val tags: String get() = row.tags
+}
+
 @Singleton
 class MemeSearchRepositoryImpl @Inject constructor(
     private val installer: LocalModelInstaller,
     private val memeDao: MemeDao,
     private val embeddingDao: TextEmbeddingDao,
+    private val extractedTextChunkDao: ExtractedTextChunkDao,
     private val mapper: MemeStorageMapper,
     private val lightLog: LightLogStore
 ) : MemeSearchRepository {
@@ -46,15 +58,14 @@ class MemeSearchRepositoryImpl @Inject constructor(
     override suspend fun reindexAll(): SearchPreparation = withContext(Dispatchers.IO) {
         val modelPackage =
             installer.activePackage() ?: return@withContext SearchPreparation(false, 0)
-        val documents = embeddingDao.searchDocuments()
+        val documents = searchDocuments()
         AppLogger.ml { "index.rebuild documents=${documents.size}" }
         SearchPreparation(true, indexDocuments(modelPackage, documents, force = true))
     }
 
     override suspend fun indexMeme(memeId: Long): Unit = withContext(Dispatchers.IO) {
         val modelPackage = installer.activePackage() ?: return@withContext
-        val document =
-            embeddingDao.searchDocuments().firstOrNull { it.memeId == memeId } ?: return@withContext
+        val document = searchDocuments().firstOrNull { it.memeId == memeId } ?: return@withContext
         AppLogger.ml { "index.single meme_id=$memeId" }
         indexDocuments(modelPackage, listOf(document))
     }
@@ -66,7 +77,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
             val modelPackage = installer.activePackage() ?: return@withContext emptyList()
             val expandedQuery = SearchQueryExpansion.expand(query)
             val databaseStartedAt = android.os.SystemClock.elapsedRealtimeNanos()
-            val documents = embeddingDao.searchDocuments()
+            val documents = searchDocuments()
             val embeddings =
                 embeddingDao.getByModel(modelPackage.modelSha256).associateBy { it.memeId }
             val indexed =
@@ -243,7 +254,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
 
     private suspend fun indexDocuments(
         modelPackage: TextModelPackage,
-        documents: List<SearchDocumentRow>,
+        documents: List<SearchDocument>,
         force: Boolean = false
     ): Int {
         val pending = documents.filter { document ->
@@ -318,10 +329,19 @@ class MemeSearchRepositoryImpl @Inject constructor(
         return pending.size
     }
 
-    private fun documentText(document: SearchDocumentRow): String =
-        listOf(document.description.trim(), document.tags.replace('\u001f', ' ').trim()).filter(
-            String::isNotBlank
-        ).joinToString("\n")
+    private suspend fun searchDocuments(): List<SearchDocument> {
+        val extractedByMeme = extractedTextChunkDao.getAll().groupBy(ExtractedTextChunkEntity::memeId)
+        return embeddingDao.searchDocuments().map { document ->
+            SearchDocument(document, extractedByMeme[document.memeId].orEmpty())
+        }
+    }
+
+    private fun documentText(document: SearchDocument): String =
+        buildList {
+            add(document.row.description.trim())
+            add(document.row.tags.replace('\u001f', ' ').trim())
+            addAll(document.extractedChunks.map(ExtractedTextChunkEntity::text).map(String::trim))
+        }.filter(String::isNotBlank).joinToString("\n")
 
     private fun elapsedMs(startedAt: Long): Long =
         (android.os.SystemClock.elapsedRealtimeNanos() - startedAt) / 1_000_000L
@@ -346,7 +366,7 @@ class MemeSearchRepositoryImpl @Inject constructor(
     }
 
     private suspend fun candidatesJson(
-        indexed: List<Pair<SearchDocumentRow, TextEmbeddingEntity>>,
+        indexed: List<Pair<SearchDocument, TextEmbeddingEntity>>,
         denseScores: List<Float>,
         bm25Scores: List<Float>,
         relevanceDecisions: List<SearchRelevanceDecision>,
@@ -381,6 +401,20 @@ class MemeSearchRepositoryImpl @Inject constructor(
                                     JSONArray(
                                         document.tags.split('\u001f').filter(String::isNotBlank)
                                     )
+                                )
+                                .put(
+                                    "extracted_text_chunks",
+                                    JSONArray().apply {
+                                        document.extractedChunks.forEach { chunk ->
+                                            put(
+                                                JSONObject()
+                                                    .put("source", chunk.source)
+                                                    .put("timestamp_ms", chunk.timestampMs)
+                                                    .put("text", chunk.text)
+                                                    .put("model_release_tag", chunk.modelReleaseTag)
+                                            )
+                                        }
+                                    }
                                 )
                                 .put("indexed_text", documentText(document))
                         )

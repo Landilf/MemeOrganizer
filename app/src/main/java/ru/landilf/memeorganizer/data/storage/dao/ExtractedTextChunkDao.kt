@@ -8,6 +8,9 @@ import ru.landilf.memeorganizer.data.storage.entities.search.ExtractedTextChunkE
 
 @Dao
 interface ExtractedTextChunkDao {
+    @Query("SELECT * FROM extracted_text_chunks ORDER BY memeId, source, timestampMs ASC, id ASC")
+    suspend fun getAll(): List<ExtractedTextChunkEntity>
+
     @Query(
         """
         SELECT * FROM extracted_text_chunks
