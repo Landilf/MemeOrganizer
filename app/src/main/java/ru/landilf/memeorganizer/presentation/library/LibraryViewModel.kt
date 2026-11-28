@@ -23,6 +23,7 @@ import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingProgress
 import ru.landilf.memeorganizer.domain.repository.MemeDetailsRepository
 import ru.landilf.memeorganizer.domain.repository.MemeExportRepository
 import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
+import ru.landilf.memeorganizer.domain.repository.MemeThumbnailRepository
 import ru.landilf.memeorganizer.domain.usecase.album.CreateAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.AddMemesToAlbumUseCase
 import ru.landilf.memeorganizer.domain.usecase.album.DeleteAlbumUseCase
@@ -70,8 +71,13 @@ class LibraryViewModel @Inject constructor(
     private val removeMemesFromAlbumUseCase: RemoveMemesFromAlbumUseCase,
     private val memeExportRepository: MemeExportRepository,
     private val mediaIndexingRepository: MediaIndexingRepository,
+    private val memeThumbnailRepository: MemeThumbnailRepository,
     private val searchActionLog: SearchActionLogWriter
 ) : ViewModel() {
+    init {
+        viewModelScope.launch { memeThumbnailRepository.scheduleMissing() }
+    }
+
     val memes =
         observeMemes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val albums =

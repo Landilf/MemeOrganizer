@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.data.logging.IndexingEventLogger
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
+import ru.landilf.memeorganizer.data.thumbnail.ThumbnailCache
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingDao
 import ru.landilf.memeorganizer.data.storage.dao.MediaIndexingRunDao
 import ru.landilf.memeorganizer.data.storage.dao.MemeDao
@@ -46,6 +47,7 @@ class MediaIndexingWorker(
         val current = indexingDao.getByMemeId(memeId) ?: return Result.success()
         if (current.runId != runId) return Result.success()
         if (queueController.isPaused()) return Result.success()
+        runCatching { dependencies.thumbnailCache().ensure(meme) }
         val modelPackage = dependencies.modelInstaller().activePackage()
         if (modelPackage == null) {
             AppLogger.ml { "media_indexing.waiting_for_model meme_id=$memeId" }
@@ -202,4 +204,5 @@ interface MediaIndexingWorkerEntryPoint {
     fun ocrMediaProcessor(): OcrMediaProcessor
     fun asrMediaProcessor(): AsrMediaProcessor
     fun indexingEventLogger(): IndexingEventLogger
+    fun thumbnailCache(): ThumbnailCache
 }

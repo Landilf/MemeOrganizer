@@ -53,51 +53,121 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.io.File
 
-private val videoFrames = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
+private const val THUMBNAIL_SIZE_PX = 512
+
+private val thumbnails = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
 }
+private val thumbnailDecodeSemaphore = Semaphore(permits = 2)
 
-private suspend fun loadVideoFrame(context: android.content.Context, uri: Uri): Bitmap? =
+private fun thumbnailKey(uri: Uri, video: Boolean) =
+    if (video) "video:${uri}" else "image:${uri}"
+
+private fun generatedThumbnailFile(uri: Uri): File? {
+    if (uri.scheme != "file") return null
+    val source = uri.path?.let(::File) ?: return null
+    val mediaDirectory = source.parentFile?.takeIf { it.name == "memes" } ?: return null
+    val filesDirectory = mediaDirectory.parentFile ?: return null
+    return File(filesDirectory, "thumbnails/${source.name}.webp")
+}
+
+private suspend fun loadThumbnail(
+    key: String,
+    decode: () -> Bitmap?
+): Bitmap? =
     withContext(Dispatchers.IO) {
-        videoFrames.get(uri.toString()) ?: runCatching {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(context, uri)
-                if (Build.VERSION.SDK_INT >= 27) retriever.getScaledFrameAtTime(
-                    0,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    512,
-                    512
-                )
-                else retriever.getFrameAtTime(0)
-            } finally {
-                retriever.release()
-            }
-        }.getOrNull()?.also { videoFrames.put(uri.toString(), it) }
+        thumbnails.get(key) ?: thumbnailDecodeSemaphore.withPermit {
+            thumbnails.get(key) ?: runCatching(decode).getOrNull()?.also { thumbnails.put(key, it) }
+        }
     }
+
+private suspend fun loadVideoFrame(context: android.content.Context, uri: Uri): Bitmap? {
+    val key = thumbnailKey(uri, video = true)
+    return loadThumbnail(key) {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, uri)
+            if (Build.VERSION.SDK_INT >= 27) retriever.getScaledFrameAtTime(
+                0,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                THUMBNAIL_SIZE_PX,
+                THUMBNAIL_SIZE_PX
+            )
+            else retriever.getFrameAtTime(0)
+        } finally {
+            retriever.release()
+        }
+    }
+}
+
+private suspend fun loadImageThumbnail(context: android.content.Context, uri: Uri): Bitmap? {
+    val key = thumbnailKey(uri, video = false)
+    return loadThumbnail(key) {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)
+            ?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            null
+        } else {
+            var sample = 1
+            while (
+                bounds.outWidth / sample > THUMBNAIL_SIZE_PX ||
+                bounds.outHeight / sample > THUMBNAIL_SIZE_PX
+            ) {
+                sample *= 2
+            }
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(
+                    it,
+                    null,
+                    BitmapFactory.Options().apply { inSampleSize = sample }
+                )
+            }
+        }
+    }
+}
+
+private suspend fun loadOriginalImage(context: android.content.Context, uri: Uri): Bitmap? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            context.contentResolver.openInputStream(uri)
+                ?.use { BitmapFactory.decodeStream(it) }
+        }.getOrNull()
+    }
+
+private suspend fun loadGeneratedThumbnail(file: File): Bitmap? =
+    loadThumbnail("thumbnail:${file.path}") { BitmapFactory.decodeFile(file.path) }
 
 @Composable
 fun MediaThumbnail(uri: Uri, mimeType: String?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val video = mimeType?.startsWith("video/") == true
-    val bitmap by produceState<Bitmap?>(initialValue = null, uri, mimeType) {
-        value = null
-        value = if (video) loadVideoFrame(context, uri) else withContext(Dispatchers.IO) {
-            runCatching {
-                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                context.contentResolver.openInputStream(uri)
-                    ?.use { BitmapFactory.decodeStream(it, null, options) }
-                var sample = 1
-                while (options.outWidth / sample > 512 || options.outHeight / sample > 512) sample *= 2
-                context.contentResolver.openInputStream(uri)?.use {
-                    BitmapFactory.decodeStream(
-                        it,
-                        null,
-                        BitmapFactory.Options().apply { inSampleSize = sample })
+    val key = remember(uri, video) { thumbnailKey(uri, video) }
+    val generatedFile = remember(uri) { generatedThumbnailFile(uri) }
+    val generatedKey = generatedFile?.let { "thumbnail:${it.path}" }
+    val bitmap by produceState<Bitmap?>(
+        initialValue = generatedKey?.let(thumbnails::get) ?: thumbnails.get(key),
+        key1 = key,
+        key2 = generatedKey
+    ) {
+        if (generatedFile != null) {
+            repeat(50) {
+                if (generatedFile.isFile) {
+                    value = loadGeneratedThumbnail(generatedFile)
+                    return@produceState
                 }
-            }.getOrNull()
+                delay(100)
+            }
+        }
+        value = thumbnails.get(key) ?: if (video) {
+            loadVideoFrame(context, uri)
+        } else {
+            loadImageThumbnail(context, uri)
         }
     }
     Box(
@@ -111,7 +181,7 @@ fun MediaThumbnail(uri: Uri, mimeType: String?, modifier: Modifier = Modifier) {
             Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        else Icon(
+        else if (generatedFile == null) Icon(
             Icons.Default.BrokenImage,
             contentDescription = stringResource(R.string.media_preview_unavailable)
         )
@@ -144,10 +214,7 @@ fun FullMedia(
                             context.contentResolver,
                             uri
                         )
-                    ) { decoder, info, _ ->
-                        val largest = maxOf(info.size.width, info.size.height)
-                        if (largest > 2048) decoder.setTargetSampleSize((largest + 2047) / 2048)
-                    }
+                    )
                 }.getOrNull()
             }
         }
@@ -164,14 +231,21 @@ fun FullMedia(
                 onRelease = { (it.drawable as? AnimatedImageDrawable)?.stop() })
         }
     } else {
+        val context = LocalContext.current
+        val bitmap by produceState<Bitmap?>(initialValue = null, uri) {
+            value = loadOriginalImage(context, uri)
+        }
         ZoomableMedia(
             uri,
             modifier.pointerInput(uri) { detectTapGestures(onTap = { onToggleControls() }) }) { transform ->
-            MediaThumbnail(
-                uri,
-                mimeType,
-                Modifier.fillMaxSize().then(transform)
-            )
+            bitmap?.let {
+                Image(
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize().then(transform),
+                    contentScale = ContentScale.Fit
+                )
+            }
         }
     }
 }

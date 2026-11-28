@@ -1117,7 +1117,13 @@ private fun MainTabsScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    items(pageMemes, key = { it.id }) { meme ->
+                    items(
+                        items = pageMemes,
+                        key = { it.id },
+                        contentType = { meme ->
+                            if (meme.mimeType.startsWith("video/")) "video" else "image"
+                        }
+                    ) { meme ->
                         Box(
                             Modifier.fillMaxWidth().aspectRatio(1f).combinedClickable(
                                 onLongClick = { selected = selected + meme.id },

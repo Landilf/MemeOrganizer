@@ -23,6 +23,7 @@ import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingRun
 import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
+import ru.landilf.memeorganizer.domain.repository.MemeThumbnailRepository
 
 @Singleton
 class MediaIndexingRepositoryImpl @Inject constructor(
@@ -31,13 +32,18 @@ class MediaIndexingRepositoryImpl @Inject constructor(
     private val indexingRunDao: MediaIndexingRunDao,
     private val memeDao: MemeDao,
     private val indexingNotifier: IndexingNotifier,
-    private val queueController: IndexingQueueController
+    private val queueController: IndexingQueueController,
+    private val thumbnailRepository: MemeThumbnailRepository
 ) : MediaIndexingRepository {
     override suspend fun enqueue(memeId: Long) {
+        thumbnailRepository.scheduleMissing()
         scheduleNewRun(listOf(memeId))
     }
 
-    override suspend fun enqueueAll(memeIds: List<Long>): Int = scheduleNewRun(memeIds)
+    override suspend fun enqueueAll(memeIds: List<Long>): Int {
+        thumbnailRepository.scheduleMissing()
+        return scheduleNewRun(memeIds)
+    }
 
     override suspend fun resumePending() {
         if (queueController.isPaused()) return

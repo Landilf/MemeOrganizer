@@ -20,6 +20,8 @@ import ru.landilf.memeorganizer.data.storage.repository.MemeExportRepositoryImpl
 import ru.landilf.memeorganizer.domain.repository.MemeExportRepository
 import ru.landilf.memeorganizer.data.indexing.MediaIndexingRepositoryImpl
 import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
+import ru.landilf.memeorganizer.data.thumbnail.MemeThumbnailRepositoryImpl
+import ru.landilf.memeorganizer.domain.repository.MemeThumbnailRepository
 import javax.inject.Singleton
 
 @Module
@@ -64,4 +66,10 @@ abstract class RepositoryModule {
     abstract fun bindMediaIndexingRepository(
         implementation: MediaIndexingRepositoryImpl
     ): MediaIndexingRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMemeThumbnailRepository(
+        implementation: MemeThumbnailRepositoryImpl
+    ): MemeThumbnailRepository
 }
