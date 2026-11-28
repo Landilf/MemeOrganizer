@@ -19,9 +19,21 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        ivy {
+            name = "SherpaOnnxRelease"
+            url = uri("https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.10.37")
+            patternLayout {
+                artifact("[artifact]-[revision].[ext]")
+            }
+            metadataSources {
+                artifact()
+            }
+            content {
+                includeModule("com.k2fsa.sherpa.onnx", "sherpa-onnx")
+            }
+        }
     }
 }
 
 rootProject.name = "MemeOrganizer"
 include(":app")
- 

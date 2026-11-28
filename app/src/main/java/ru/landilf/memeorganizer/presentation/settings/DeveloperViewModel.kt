@@ -14,8 +14,15 @@ import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
 import ru.landilf.memeorganizer.core.logging.DebugLogExporter
 import ru.landilf.memeorganizer.data.device.BatteryStateChecker
+import ru.landilf.memeorganizer.data.ml.AsrSmokeTestResult
+import ru.landilf.memeorganizer.data.ml.AsrSmokeTestRunner
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestResult
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestRunner
+import ru.landilf.memeorganizer.data.ml.GitHubModelUpdater
+import ru.landilf.memeorganizer.data.ml.InsufficientModelStorageException
+import ru.landilf.memeorganizer.data.ml.ModelDownloadProgress
+import ru.landilf.memeorganizer.data.ml.ModelRelease
+import ru.landilf.memeorganizer.data.ml.ModelUpdateOfflineException
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.ml.OcrSmokeTestResult
 import ru.landilf.memeorganizer.data.ml.OcrSmokeTestRunner
@@ -45,10 +52,26 @@ enum class DebugExportStatus {
     OcrTestSuccess,
     OcrTestUnavailable,
     OcrTestError,
+    TestingAsr,
+    AsrTestSuccess,
+    AsrTestUnavailable,
+    AsrTestError,
     SimulatingIndexingFailure,
     SimulatedIndexingFailure,
     SimulatedIndexingFailureError
 }
+
+enum class DeveloperModelReleaseNotice { None, Installed, Offline, InsufficientStorage, Error }
+
+data class DeveloperModelReleaseUiState(
+    val visible: Boolean = false,
+    val loading: Boolean = false,
+    val releases: List<ModelRelease> = emptyList(),
+    val installedTag: String? = null,
+    val selectedRelease: ModelRelease? = null,
+    val progress: ModelDownloadProgress? = null,
+    val notice: DeveloperModelReleaseNotice = DeveloperModelReleaseNotice.None
+)
 
 @HiltViewModel
 class DeveloperViewModel @Inject constructor(
@@ -57,6 +80,8 @@ class DeveloperViewModel @Inject constructor(
     private val modelInstaller: LocalModelInstaller,
     private val fusionSmokeTestRunner: FusionSmokeTestRunner,
     private val ocrSmokeTestRunner: OcrSmokeTestRunner,
+    private val asrSmokeTestRunner: AsrSmokeTestRunner,
+    private val modelUpdater: GitHubModelUpdater,
     private val batteryStateChecker: BatteryStateChecker,
     private val indexingNotifier: IndexingNotifier,
     observeMemes: ObserveMemesUseCase,
@@ -68,6 +93,8 @@ class DeveloperViewModel @Inject constructor(
     val reindexedCount = _reindexedCount.asStateFlow()
     private val _lowBatteryConfirmationRequired = MutableStateFlow(false)
     val lowBatteryConfirmationRequired = _lowBatteryConfirmationRequired.asStateFlow()
+    private val _modelReleaseState = MutableStateFlow(DeveloperModelReleaseUiState())
+    val modelReleaseState = _modelReleaseState.asStateFlow()
     val memes = observeMemes()
         .stateIn(
             viewModelScope,
@@ -200,6 +227,121 @@ class DeveloperViewModel @Inject constructor(
         }
     }
 
+    fun runAsrSmokeTest() {
+        if (_status.value.isBusy()) return
+        _status.value = DebugExportStatus.TestingAsr
+        viewModelScope.launch {
+            try {
+                val modelPackage = modelInstaller.activePackage()
+                _status.value = when {
+                    modelPackage == null -> DebugExportStatus.AsrTestUnavailable
+                    asrSmokeTestRunner.run(modelPackage) is AsrSmokeTestResult.Passed -> {
+                        DebugExportStatus.AsrTestSuccess
+                    }
+
+                    else -> DebugExportStatus.AsrTestUnavailable
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppLogger.mlError(error) { "asr.smoke_test.failed" }
+                _status.value = DebugExportStatus.AsrTestError
+            }
+        }
+    }
+
+    fun openModelReleasePicker() {
+        if (_status.value.isBusy() || _modelReleaseState.value.loading ||
+            _modelReleaseState.value.progress != null
+        ) return
+        _modelReleaseState.value = DeveloperModelReleaseUiState(visible = true, loading = true)
+        viewModelScope.launch {
+            try {
+                val installedTag = modelInstaller.activePackage()?.releaseTag
+                val releases = modelUpdater.availableReleases()
+                _modelReleaseState.value = DeveloperModelReleaseUiState(
+                    visible = true,
+                    releases = releases,
+                    installedTag = installedTag
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: ModelUpdateOfflineException) {
+                _modelReleaseState.value = DeveloperModelReleaseUiState(
+                    notice = DeveloperModelReleaseNotice.Offline
+                )
+            } catch (error: Exception) {
+                AppLogger.mlError(error) { "developer.model_releases.load.failed" }
+                _modelReleaseState.value = DeveloperModelReleaseUiState(
+                    notice = DeveloperModelReleaseNotice.Error
+                )
+            }
+        }
+    }
+
+    fun selectModelRelease(release: ModelRelease) {
+        _modelReleaseState.update { it.copy(selectedRelease = release) }
+    }
+
+    fun dismissModelReleaseSelection() {
+        _modelReleaseState.update { it.copy(selectedRelease = null) }
+    }
+
+    fun dismissModelReleasePicker() {
+        if (_modelReleaseState.value.progress != null) return
+        _modelReleaseState.update {
+            it.copy(visible = false, selectedRelease = null, releases = emptyList())
+        }
+    }
+
+    fun installSelectedModelRelease() {
+        val release = _modelReleaseState.value.selectedRelease ?: return
+        if (_modelReleaseState.value.progress != null) return
+        _modelReleaseState.update {
+            it.copy(
+                selectedRelease = null,
+                progress = ModelDownloadProgress.Downloading(0, release.archiveSizeBytes),
+                notice = DeveloperModelReleaseNotice.None
+            )
+        }
+        viewModelScope.launch {
+            try {
+                modelUpdater.downloadAndInstall(release) { progress ->
+                    _modelReleaseState.update { it.copy(progress = progress) }
+                }
+                try {
+                    mediaIndexingRepository.resumePending()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    AppLogger.mlError(error) {
+                        "developer.model_releases.install.resume_indexing.failed"
+                    }
+                }
+                _modelReleaseState.value = DeveloperModelReleaseUiState(
+                    installedTag = release.tag,
+                    notice = DeveloperModelReleaseNotice.Installed
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: ModelUpdateOfflineException) {
+                _modelReleaseState.update {
+                    it.copy(progress = null, notice = DeveloperModelReleaseNotice.Offline)
+                }
+            } catch (error: InsufficientModelStorageException) {
+                AppLogger.mlError(error) { "developer.model_releases.install.storage_insufficient" }
+                _modelReleaseState.update {
+                    it.copy(progress = null, notice = DeveloperModelReleaseNotice.InsufficientStorage)
+                }
+            } catch (error: Exception) {
+                AppLogger.mlError(error) { "developer.model_releases.install.failed" }
+                _modelReleaseState.update {
+                    it.copy(progress = null, notice = DeveloperModelReleaseNotice.Error)
+                }
+            }
+        }
+    }
+
     fun simulateIndexingFailure(memeId: Long) {
         if (_status.value.isBusy()) return
         _status.value = DebugExportStatus.SimulatingIndexingFailure
@@ -223,5 +365,6 @@ internal fun DebugExportStatus.isBusy(): Boolean = this in setOf(
     DebugExportStatus.Reindexing,
     DebugExportStatus.TestingFusion,
     DebugExportStatus.TestingOcr,
+    DebugExportStatus.TestingAsr,
     DebugExportStatus.SimulatingIndexingFailure
 )

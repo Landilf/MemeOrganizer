@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Movie
-import android.media.MediaMetadataRetriever
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -23,6 +22,10 @@ class OcrMediaProcessor @Inject constructor(
     private val extractedTextChunkDao: ExtractedTextChunkDao
 ) {
     suspend fun process(meme: MemeEntity, modelPackage: TextModelPackage): Boolean {
+        if (meme.mimeType.startsWith("video/")) {
+            extractedTextChunkDao.deleteForMemeAndSource(meme.id, ExtractedTextSource.Ocr.storageValue)
+            return false
+        }
         val file = File(context.filesDir, "memes/${meme.storedFileName}")
         val inputs: List<Pair<ru.landilf.memeorganizer.domain.model.ml.OcrImage, Long?>> = when {
             meme.mimeType.startsWith("image/") && meme.mimeType != "image/gif" -> {
@@ -30,8 +33,6 @@ class OcrMediaProcessor @Inject constructor(
             }
 
             meme.mimeType == "image/gif" -> loadGifFrames(file)
-            meme.mimeType.startsWith("video/") -> loadVideoFrames(file)
-
             else -> null
         } ?: return false
         val engine = OnnxOcrEngine.open(modelPackage) ?: return false
@@ -58,32 +59,6 @@ class OcrMediaProcessor @Inject constructor(
         }
     }
 
-    private fun loadVideoFrames(file: File): List<Pair<ru.landilf.memeorganizer.domain.model.ml.OcrImage, Long?>>? = runCatching {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(file.absolutePath)
-            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-                ?.toIntOrNull() ?: return@runCatching null
-            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-                ?.toIntOrNull() ?: return@runCatching null
-            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                ?.toLongOrNull() ?: 0L
-            val scale = minOf(1f, MAX_VIDEO_FRAME_SIDE / maxOf(width, height).toFloat())
-            frameTimestamps(durationMs).mapNotNull { timestampMs ->
-                retriever.getScaledFrameAtTime(
-                    timestampMs * 1_000,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    (width * scale).toInt().coerceAtLeast(1),
-                    (height * scale).toInt().coerceAtLeast(1)
-                )?.let { bitmap ->
-                    try { OcrImageLoader.fromBitmap(bitmap) to timestampMs } finally { bitmap.recycle() }
-                }
-            }
-        } finally {
-            retriever.release()
-        }
-    }.getOrNull()
-
     @Suppress("DEPRECATION") // AnimatedImageDrawable cannot expose individual GIF frames by timestamp.
     private fun loadGifFrames(file: File): List<Pair<ru.landilf.memeorganizer.domain.model.ml.OcrImage, Long?>>? = runCatching {
         val movie = Movie.decodeFile(file.absolutePath) ?: return@runCatching null
@@ -100,7 +75,4 @@ class OcrMediaProcessor @Inject constructor(
 
     private fun String.normalizedForDeduplication(): String = lowercase().replace(Regex("\\s+"), " ").trim()
 
-    private companion object {
-        const val MAX_VIDEO_FRAME_SIDE = 2_048
-    }
 }

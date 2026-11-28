@@ -101,7 +101,7 @@ data class TextModelPackage(
                     val model = asset(component.getString("path"))
                     verifyHash(model, component.getString("sha256"))
                     val runtime = component.getString("runtime")
-                    require(runtime == expectedRuntime(name)) { "Unsupported component runtime" }
+                    require(isSupportedRuntime(name, runtime)) { "Unsupported component runtime" }
                     validateTensorSpecs(component.getJSONArray("inputs"))
                     validateTensorSpecs(component.getJSONArray("outputs"))
                     require(component.optJSONObject("preprocessing") != null) {
@@ -159,16 +159,17 @@ data class TextModelPackage(
             return actualHash
         }
 
-        private fun expectedRuntime(component: String): String = when (component) {
-            ASR_COMPONENT -> SHERPA_RUNTIME
-            else -> ONNX_RUNTIME
+        private fun isSupportedRuntime(component: String, runtime: String): Boolean = when (component) {
+            ASR_COMPONENT -> runtime == SHERPA_RUNTIME || runtime == LEGACY_SHERPA_RUNTIME
+            else -> runtime == ONNX_RUNTIME
         }
 
         private val RELEASE_TAG = Regex("v\\d+\\.\\d+\\.\\d+-mobile")
         private const val TEXT_ENCODER_COMPONENT = "text_encoder"
         private const val ASR_COMPONENT = "asr"
         private const val ONNX_RUNTIME = "onnxruntime"
-        private const val SHERPA_RUNTIME = "sherpa-onnx"
+        private const val SHERPA_RUNTIME = "sherpa-onnx:1.10.37"
+        private const val LEGACY_SHERPA_RUNTIME = "sherpa-onnx"
         private val SUPPORTED_COMPONENTS = setOf(
             TEXT_ENCODER_COMPONENT,
             "ocr_det",

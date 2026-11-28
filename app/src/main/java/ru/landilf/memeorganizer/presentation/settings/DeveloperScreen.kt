@@ -49,6 +49,7 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
     val reindexedCount by viewModel.reindexedCount.collectAsStateWithLifecycle()
     val memes by viewModel.memes.collectAsStateWithLifecycle()
     val lowBatteryConfirmationRequired by viewModel.lowBatteryConfirmationRequired.collectAsStateWithLifecycle()
+    val modelReleaseState by viewModel.modelReleaseState.collectAsStateWithLifecycle()
     var includeMedia by rememberSaveable { mutableStateOf(true) }
     var clearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     var failurePickerVisible by rememberSaveable { mutableStateOf(false) }
@@ -63,6 +64,13 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
         ) { uri ->
             if (uri != null) viewModel.export(uri, includeMedia)
         }
+    DeveloperModelReleaseDialog(
+        state = modelReleaseState,
+        onDismiss = viewModel::dismissModelReleasePicker,
+        onSelect = viewModel::selectModelRelease,
+        onConfirm = viewModel::installSelectedModelRelease,
+        onDismissSelection = viewModel::dismissModelReleaseSelection
+    )
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(stringResource(R.string.developer_title)) },
@@ -215,6 +223,16 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_ocr_smoke_test)) }
+            OutlinedButton(
+                onClick = viewModel::runAsrSmokeTest,
+                enabled = !status.isBusy(),
+                modifier = Modifier.padding(top = 12.dp)
+            ) { Text(stringResource(R.string.developer_asr_smoke_test)) }
+            OutlinedButton(
+                onClick = viewModel::openModelReleasePicker,
+                enabled = !status.isBusy() && modelReleaseState.progress == null,
+                modifier = Modifier.padding(top = 12.dp)
+            ) { Text(stringResource(R.string.developer_model_release_picker)) }
             if (BuildConfig.DEBUG) {
                 OutlinedButton(
                     onClick = { failurePickerVisible = true },
@@ -234,6 +252,8 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 )
 
                 DebugExportStatus.TestingOcr -> DeveloperProgress(R.string.developer_ocr_smoke_testing)
+
+                DebugExportStatus.TestingAsr -> DeveloperProgress(R.string.developer_asr_smoke_testing)
 
                 DebugExportStatus.SimulatingIndexingFailure -> DeveloperProgress(
                     R.string.developer_simulate_failure_running
@@ -295,6 +315,21 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 DebugExportStatus.OcrTestUnavailable -> Text(stringResource(R.string.developer_ocr_smoke_unavailable), Modifier.padding(top = 16.dp))
                 DebugExportStatus.OcrTestError -> Text(stringResource(R.string.developer_ocr_smoke_error), Modifier.padding(top = 16.dp))
 
+                DebugExportStatus.AsrTestSuccess -> Text(
+                    stringResource(R.string.developer_asr_smoke_success),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DebugExportStatus.AsrTestUnavailable -> Text(
+                    stringResource(R.string.developer_asr_smoke_unavailable),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DebugExportStatus.AsrTestError -> Text(
+                    stringResource(R.string.developer_asr_smoke_error),
+                    Modifier.padding(top = 16.dp)
+                )
+
                 DebugExportStatus.SimulatedIndexingFailure -> Text(
                     stringResource(R.string.developer_simulate_failure_success),
                     Modifier.padding(top = 16.dp)
@@ -306,6 +341,29 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 )
 
                 DebugExportStatus.Idle -> Unit
+            }
+            when (modelReleaseState.notice) {
+                DeveloperModelReleaseNotice.Installed -> Text(
+                    stringResource(R.string.developer_model_release_installed_success),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DeveloperModelReleaseNotice.Offline -> Text(
+                    stringResource(R.string.settings_model_update_offline),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DeveloperModelReleaseNotice.InsufficientStorage -> Text(
+                    stringResource(R.string.settings_model_storage_error),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DeveloperModelReleaseNotice.Error -> Text(
+                    stringResource(R.string.developer_model_release_error),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DeveloperModelReleaseNotice.None -> Unit
             }
         }
     }

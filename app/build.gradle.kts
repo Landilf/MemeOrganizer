@@ -76,6 +76,11 @@ android {
         compose = true
         buildConfig = true
     }
+    packaging {
+        jniLibs {
+            pickFirsts += "lib/**/libonnxruntime.so"
+        }
+    }
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
@@ -113,6 +118,11 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.onnxruntime.android)
+    implementation(libs.sherpa.onnx) {
+        artifact {
+            type = "aar"
+        }
+    }
     implementation(libs.opencv)
     implementation(libs.commons.compress)
     implementation(libs.djl.tokenizers)
