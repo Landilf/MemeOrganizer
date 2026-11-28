@@ -32,6 +32,18 @@ internal object OcrImageLoader {
         }
     }
 
+    fun fromBitmap(bitmap: Bitmap): OcrImage {
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        return OcrImage(bitmap.width, bitmap.height, ByteArray(pixels.size * 3).also { bgr ->
+            pixels.forEachIndexed { index, pixel ->
+                bgr[index * 3] = (pixel and 0xff).toByte()
+                bgr[index * 3 + 1] = (pixel shr 8 and 0xff).toByte()
+                bgr[index * 3 + 2] = (pixel shr 16 and 0xff).toByte()
+            }
+        })
+    }
+
     private fun Bitmap.withExifOrientation(file: File): Bitmap {
         val degrees = when (ExifInterface(file).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1)) {
             ExifInterface.ORIENTATION_ROTATE_90 -> 90f

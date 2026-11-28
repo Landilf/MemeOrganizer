@@ -145,7 +145,12 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 }
             )
         }
-        Column(Modifier.padding(padding).padding(24.dp)) {
+        Column(
+            Modifier
+                .padding(padding)
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
             Text(
                 stringResource(R.string.developer_logs_description),
                 style = MaterialTheme.typography.bodyMedium
@@ -205,6 +210,11 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_fusion_smoke_test)) }
+            OutlinedButton(
+                onClick = viewModel::runOcrSmokeTest,
+                enabled = !status.isBusy(),
+                modifier = Modifier.padding(top = 12.dp)
+            ) { Text(stringResource(R.string.developer_ocr_smoke_test)) }
             if (BuildConfig.DEBUG) {
                 OutlinedButton(
                     onClick = { failurePickerVisible = true },
@@ -222,6 +232,8 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 DebugExportStatus.TestingFusion -> DeveloperProgress(
                     R.string.developer_fusion_smoke_testing
                 )
+
+                DebugExportStatus.TestingOcr -> DeveloperProgress(R.string.developer_ocr_smoke_testing)
 
                 DebugExportStatus.SimulatingIndexingFailure -> DeveloperProgress(
                     R.string.developer_simulate_failure_running
@@ -278,6 +290,10 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                     stringResource(R.string.developer_fusion_smoke_error),
                     Modifier.padding(top = 16.dp)
                 )
+
+                DebugExportStatus.OcrTestSuccess -> Text(stringResource(R.string.developer_ocr_smoke_success), Modifier.padding(top = 16.dp))
+                DebugExportStatus.OcrTestUnavailable -> Text(stringResource(R.string.developer_ocr_smoke_unavailable), Modifier.padding(top = 16.dp))
+                DebugExportStatus.OcrTestError -> Text(stringResource(R.string.developer_ocr_smoke_error), Modifier.padding(top = 16.dp))
 
                 DebugExportStatus.SimulatedIndexingFailure -> Text(
                     stringResource(R.string.developer_simulate_failure_success),

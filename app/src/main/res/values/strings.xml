@@ -223,6 +223,11 @@
     <string name="developer_fusion_smoke_success">Fusion-модель прошла Smoke Test Pack.</string>
     <string name="developer_fusion_smoke_unavailable">Установите мультимодальный пакет модели, чтобы выполнить проверку.</string>
     <string name="developer_fusion_smoke_error">Fusion-модель не прошла проверку.</string>
+    <string name="developer_ocr_smoke_test">Проверить OCR-модель</string>
+    <string name="developer_ocr_smoke_testing">Проверка OCR-модели…</string>
+    <string name="developer_ocr_smoke_success">OCR-модель прошла Smoke Test Pack.</string>
+    <string name="developer_ocr_smoke_unavailable">Установите мультимодальный пакет модели, чтобы выполнить проверку.</string>
+    <string name="developer_ocr_smoke_error">OCR-модель не прошла проверку.</string>
     <string name="developer_simulate_failure">Симулировать ошибку индексации</string>
     <string name="developer_simulate_failure_title">Выберите мем</string>
     <string name="developer_simulate_failure_empty">В библиотеке нет мемов.</string>

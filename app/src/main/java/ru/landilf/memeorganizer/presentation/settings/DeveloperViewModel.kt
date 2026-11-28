@@ -17,6 +17,8 @@ import ru.landilf.memeorganizer.data.device.BatteryStateChecker
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestResult
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestRunner
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
+import ru.landilf.memeorganizer.data.ml.OcrSmokeTestResult
+import ru.landilf.memeorganizer.data.ml.OcrSmokeTestRunner
 import ru.landilf.memeorganizer.data.indexing.IndexingNotifier
 import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
@@ -39,6 +41,10 @@ enum class DebugExportStatus {
     FusionTestSuccess,
     FusionTestUnavailable,
     FusionTestError,
+    TestingOcr,
+    OcrTestSuccess,
+    OcrTestUnavailable,
+    OcrTestError,
     SimulatingIndexingFailure,
     SimulatedIndexingFailure,
     SimulatedIndexingFailureError
@@ -50,6 +56,7 @@ class DeveloperViewModel @Inject constructor(
     private val searchRepository: MemeSearchRepository,
     private val modelInstaller: LocalModelInstaller,
     private val fusionSmokeTestRunner: FusionSmokeTestRunner,
+    private val ocrSmokeTestRunner: OcrSmokeTestRunner,
     private val batteryStateChecker: BatteryStateChecker,
     private val indexingNotifier: IndexingNotifier,
     observeMemes: ObserveMemesUseCase,
@@ -174,6 +181,25 @@ class DeveloperViewModel @Inject constructor(
         }
     }
 
+    fun runOcrSmokeTest() {
+        if (_status.value.isBusy()) return
+        _status.value = DebugExportStatus.TestingOcr
+        viewModelScope.launch {
+            try {
+                val modelPackage = modelInstaller.activePackage()
+                _status.value = when {
+                    modelPackage == null -> DebugExportStatus.OcrTestUnavailable
+                    ocrSmokeTestRunner.run(modelPackage) is OcrSmokeTestResult.Passed -> DebugExportStatus.OcrTestSuccess
+                    else -> DebugExportStatus.OcrTestUnavailable
+                }
+            } catch (error: CancellationException) { throw error
+            } catch (error: Exception) {
+                AppLogger.mlError(error) { "ocr.smoke_test.failed" }
+                _status.value = DebugExportStatus.OcrTestError
+            }
+        }
+    }
+
     fun simulateIndexingFailure(memeId: Long) {
         if (_status.value.isBusy()) return
         _status.value = DebugExportStatus.SimulatingIndexingFailure
@@ -196,5 +222,6 @@ internal fun DebugExportStatus.isBusy(): Boolean = this in setOf(
     DebugExportStatus.Clearing,
     DebugExportStatus.Reindexing,
     DebugExportStatus.TestingFusion,
+    DebugExportStatus.TestingOcr,
     DebugExportStatus.SimulatingIndexingFailure
 )
