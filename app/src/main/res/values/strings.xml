@@ -235,6 +235,8 @@
     <string name="developer_simulate_failure_success">Тестовая ошибка индексации создана.</string>
     <string name="developer_simulate_failure_error">Не удалось создать тестовую ошибку.</string>
     <string name="indexing_notification_channel_name">Обработка мемов</string>
+    <string name="indexing_notification_progress_title">Обработка мемов</string>
+    <string name="indexing_notification_progress_message">Обработано: %1$d / %2$d</string>
     <string name="indexing_notification_waiting_title">Обработка отложена</string>
     <string name="indexing_notification_waiting_message">Задача продолжится, когда заряд батареи будет достаточным.</string>
     <string name="indexing_notification_resumed_title">Обработка возобновлена</string>

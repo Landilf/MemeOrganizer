@@ -62,6 +62,7 @@ class MediaIndexingWorker(
                 processingStartedAtMillis = startedAtMillis
             )
         )
+        notifyRunProgress(dependencies.indexingNotifier(), indexingRunDao, runId)
         return try {
             dependencies.ocrMediaProcessor().process(meme, modelPackage)
             dependencies.searchRepository().indexMeme(memeId)
@@ -85,7 +86,9 @@ class MediaIndexingWorker(
             )
             indexingRunDao.pruneFinished(HISTORY_LIMIT)
             AppLogger.ml { "media_indexing.partial meme_id=$memeId" }
-            dependencies.indexingNotifier().completed()
+            if (notifyRunProgress(dependencies.indexingNotifier(), indexingRunDao, runId)) {
+                dependencies.indexingNotifier().completed()
+            }
             Result.success()
         } catch (error: CancellationException) {
             val isCurrentRun = indexingDao.getByMemeId(memeId)?.runId == runId
@@ -143,7 +146,9 @@ class MediaIndexingWorker(
                 indexingRunDao.pruneFinished(HISTORY_LIMIT)
             }
             AppLogger.mlError(error) { "media_indexing.failed meme_id=$memeId attempts=$attempts" }
-            if (finalFailure) dependencies.indexingNotifier().failed()
+            if (finalFailure && notifyRunProgress(dependencies.indexingNotifier(), indexingRunDao, runId)) {
+                dependencies.indexingNotifier().failed()
+            }
             if (finalFailure) Result.failure() else Result.retry()
         }
     }
@@ -156,6 +161,19 @@ class MediaIndexingWorker(
         private const val MAX_ATTEMPTS = 3
         private const val HISTORY_LIMIT = 20
     }
+}
+
+private suspend fun notifyRunProgress(
+    notifier: IndexingNotifier,
+    indexingRunDao: MediaIndexingRunDao,
+    runId: Long
+): Boolean {
+    val run = indexingRunDao.getById(runId) ?: return false
+    notifier.showProgress(
+        completedCount = run.completedCount + run.failedCount,
+        totalCount = run.totalCount
+    )
+    return run.finishedAtMillis != null
 }
 
 private fun Throwable.toFailureReason(): String = buildString {

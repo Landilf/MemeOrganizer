@@ -16,6 +16,9 @@ interface MediaIndexingRunDao {
     )
     fun observeRecent(limit: Int): Flow<List<MediaIndexingRunEntity>>
 
+    @Query("SELECT * FROM media_indexing_runs WHERE id = :runId")
+    suspend fun getById(runId: Long): MediaIndexingRunEntity?
+
     @Query(
         """
         UPDATE media_indexing_runs

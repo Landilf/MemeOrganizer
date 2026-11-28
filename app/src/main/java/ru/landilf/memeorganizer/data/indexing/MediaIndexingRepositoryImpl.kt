@@ -97,6 +97,7 @@ class MediaIndexingRepositoryImpl @Inject constructor(
             cancelAllWorkByTag(INDEXING_WORK_TAG)
             scheduledMemeIds.forEach { memeId -> cancelUniqueWork(workName(memeId)) }
         }
+        indexingNotifier.clearProgress()
         Unit
     }
 
@@ -132,6 +133,9 @@ class MediaIndexingRepositoryImpl @Inject constructor(
                     runId = runId
                 )
             )
+        }
+        if (!waitingForBattery && !queuePaused) {
+            indexingNotifier.showProgress(completedCount = 0, totalCount = distinctIds.size)
         }
         if (waitingForBattery) indexingNotifier.waitingForBattery()
         if (!queuePaused) {
