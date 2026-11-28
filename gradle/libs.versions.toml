@@ -23,6 +23,7 @@ commonsCompress = "1.27.1"
 djl = "0.33.0"
 work = "2.10.5"
 documentfile = "1.1.0"
+opencv = "4.9.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -60,6 +61,7 @@ djl-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djl"
 djl-tokenizer-native = { module = "ai.djl.android:tokenizer-native", version.ref = "djl" }
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
+opencv = { module = "org.opencv:opencv", version.ref = "opencv" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

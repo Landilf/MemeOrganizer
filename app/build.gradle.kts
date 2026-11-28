@@ -113,6 +113,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.onnxruntime.android)
+    implementation(libs.opencv)
     implementation(libs.commons.compress)
     implementation(libs.djl.tokenizers)
     runtimeOnly(libs.djl.tokenizer.native)

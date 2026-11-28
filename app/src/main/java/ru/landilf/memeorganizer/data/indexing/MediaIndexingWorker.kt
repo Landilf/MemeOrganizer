@@ -37,14 +37,16 @@ class MediaIndexingWorker(
         val indexingDao = dependencies.indexingDao()
         val indexingRunDao = dependencies.indexingRunDao()
         val queueController = dependencies.queueController()
-        if (memeDao.getById(memeId) == null) {
+        val meme = memeDao.getById(memeId)
+        if (meme == null) {
             indexingDao.deleteByMemeId(memeId)
             return Result.success()
         }
         val current = indexingDao.getByMemeId(memeId) ?: return Result.success()
         if (current.runId != runId) return Result.success()
         if (queueController.isPaused()) return Result.success()
-        if (dependencies.modelInstaller().activePackage() == null) {
+        val modelPackage = dependencies.modelInstaller().activePackage()
+        if (modelPackage == null) {
             AppLogger.ml { "media_indexing.waiting_for_model meme_id=$memeId" }
             return Result.success()
         }
@@ -61,6 +63,7 @@ class MediaIndexingWorker(
             )
         )
         return try {
+            dependencies.ocrMediaProcessor().process(meme, modelPackage)
             dependencies.searchRepository().indexMeme(memeId)
             if (indexingDao.getByMemeId(memeId)?.runId != runId) return Result.success()
             val finishedAtMillis = System.currentTimeMillis()
@@ -174,4 +177,5 @@ interface MediaIndexingWorkerEntryPoint {
     fun batteryStateChecker(): BatteryStateChecker
     fun indexingNotifier(): IndexingNotifier
     fun queueController(): IndexingQueueController
+    fun ocrMediaProcessor(): OcrMediaProcessor
 }
