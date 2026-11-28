@@ -40,6 +40,21 @@ interface MediaIndexingRunDao {
     )
 
     @Query(
+        "UPDATE media_indexing_runs SET pausedAtMillis = :pausedAtMillis WHERE finishedAtMillis IS NULL AND pausedAtMillis IS NULL"
+    )
+    suspend fun pauseActive(pausedAtMillis: Long)
+
+    @Query(
+        """
+        UPDATE media_indexing_runs
+        SET totalPausedDurationMillis = totalPausedDurationMillis + (:resumedAtMillis - pausedAtMillis),
+            pausedAtMillis = NULL
+        WHERE finishedAtMillis IS NULL AND pausedAtMillis IS NOT NULL
+        """
+    )
+    suspend fun resumeActive(resumedAtMillis: Long)
+
+    @Query(
         """
         DELETE FROM media_indexing_runs
         WHERE finishedAtMillis IS NOT NULL

@@ -32,7 +32,8 @@ class MediaIndexingRepositoryImpl @Inject constructor(
     private val indexingRunDao: MediaIndexingRunDao,
     private val memeDao: MemeDao,
     private val batteryStateChecker: BatteryStateChecker,
-    private val indexingNotifier: IndexingNotifier
+    private val indexingNotifier: IndexingNotifier,
+    private val queueController: IndexingQueueController
 ) : MediaIndexingRepository {
     override suspend fun enqueue(memeId: Long) {
         scheduleNewRun(listOf(memeId))
@@ -41,6 +42,7 @@ class MediaIndexingRepositoryImpl @Inject constructor(
     override suspend fun enqueueAll(memeIds: List<Long>): Int = scheduleNewRun(memeIds)
 
     override suspend fun resumePending() {
+        if (queueController.isPaused()) return
         val pending = indexingDao.getByStatus(MediaIndexingStatus.Pending.storageValue)
         pending.filter { it.runId != null }.forEach { item ->
             enqueueWork(item.memeId, requireNotNull(item.runId))
@@ -52,6 +54,58 @@ class MediaIndexingRepositoryImpl @Inject constructor(
         indexingDao.getMemeIdsByStatus(MediaIndexingStatus.Failed.storageValue)
     )
 
+    override suspend fun retryFailed(memeId: Long): Boolean = withContext(Dispatchers.IO) {
+        val item = indexingDao.getByMemeId(memeId)
+        if (item?.status != MediaIndexingStatus.Failed.storageValue) return@withContext false
+        scheduleNewRun(listOf(memeId)) > 0
+    }
+
+    override suspend fun failureReason(memeId: Long): String? = withContext(Dispatchers.IO) {
+        indexingDao.getByMemeId(memeId)
+            ?.takeIf { it.status == MediaIndexingStatus.Failed.storageValue }
+            ?.lastError
+    }
+
+    override suspend fun simulateFailureForDebug(memeId: Long) = withContext(Dispatchers.IO) {
+        WorkManager.getInstance(context).cancelUniqueWork(workName(memeId))
+        indexingDao.upsert(
+            MediaIndexingEntity(
+                memeId = memeId,
+                status = MediaIndexingStatus.Failed.storageValue,
+                attemptCount = DEBUG_FAILURE_ATTEMPTS,
+                lastError = DEBUG_FAILURE_REASON,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun pauseQueue() = withContext(Dispatchers.IO) {
+        queueController.setPaused(true)
+        val now = System.currentTimeMillis()
+        val scheduledMemeIds = (
+            indexingDao.getByStatus(MediaIndexingStatus.Pending.storageValue) +
+                indexingDao.getByStatus(MediaIndexingStatus.Running.storageValue)
+            ).map(MediaIndexingEntity::memeId)
+        indexingRunDao.pauseActive(now)
+        indexingDao.moveRunningToPending(
+            runningStatus = MediaIndexingStatus.Running.storageValue,
+            pendingStatus = MediaIndexingStatus.Pending.storageValue,
+            reason = PAUSED_REASON,
+            updatedAtMillis = now
+        )
+        WorkManager.getInstance(context).apply {
+            cancelAllWorkByTag(INDEXING_WORK_TAG)
+            scheduledMemeIds.forEach { memeId -> cancelUniqueWork(workName(memeId)) }
+        }
+        Unit
+    }
+
+    override suspend fun resumeQueue() = withContext(Dispatchers.IO) {
+        queueController.setPaused(false)
+        indexingRunDao.resumeActive(System.currentTimeMillis())
+        resumePending()
+    }
+
     override suspend fun reprocessAll(): Int = scheduleNewRun(memeDao.getAll().map { it.id })
 
     private suspend fun scheduleNewRun(memeIds: List<Long>): Int = withContext(Dispatchers.IO) {
@@ -59,10 +113,12 @@ class MediaIndexingRepositoryImpl @Inject constructor(
         if (distinctIds.isEmpty()) return@withContext 0
         val waitingForBattery = batteryStateChecker.needsHeavyWorkConfirmation()
         val updatedAtMillis = System.currentTimeMillis()
+        val queuePaused = queueController.isPaused()
         val runId = indexingRunDao.insert(
             MediaIndexingRunEntity(
                 startedAtMillis = updatedAtMillis,
-                totalCount = distinctIds.size
+                totalCount = distinctIds.size,
+                pausedAtMillis = if (queuePaused) updatedAtMillis else null
             )
         )
         distinctIds.forEach { memeId ->
@@ -78,7 +134,9 @@ class MediaIndexingRepositoryImpl @Inject constructor(
             )
         }
         if (waitingForBattery) indexingNotifier.waitingForBattery()
-        distinctIds.forEach { memeId -> enqueueWork(memeId, runId) }
+        if (!queuePaused) {
+            distinctIds.forEach { memeId -> enqueueWork(memeId, runId) }
+        }
         distinctIds.size
     }
 
@@ -101,10 +159,14 @@ class MediaIndexingRepositoryImpl @Inject constructor(
                     completedCount = run.completedCount,
                     failedCount = run.failedCount,
                     totalDurationMillis = run.totalDurationMillis,
-                    finishedAtMillis = run.finishedAtMillis
+                    finishedAtMillis = run.finishedAtMillis,
+                    pausedAtMillis = run.pausedAtMillis,
+                    totalPausedDurationMillis = run.totalPausedDurationMillis
                 )
             }
         }
+
+    override fun observeQueuePaused(): Flow<Boolean> = queueController.paused
 
     private fun enqueueWork(memeId: Long, runId: Long) {
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -119,6 +181,7 @@ class MediaIndexingRepositoryImpl @Inject constructor(
                 )
                 .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
+                .addTag(INDEXING_WORK_TAG)
                 .build()
         )
     }
@@ -126,6 +189,10 @@ class MediaIndexingRepositoryImpl @Inject constructor(
     companion object {
         fun workName(memeId: Long) = "media_indexing_$memeId"
         const val BATTERY_LOW_REASON = "battery_low"
+        const val PAUSED_REASON = "paused"
+        const val INDEXING_WORK_TAG = "media_indexing"
+        private const val DEBUG_FAILURE_ATTEMPTS = 3
+        private const val DEBUG_FAILURE_REASON = "DebugFailure: simulated by developer"
         private const val BACKOFF_SECONDS = 30L
         private const val HISTORY_LIMIT = 20
     }

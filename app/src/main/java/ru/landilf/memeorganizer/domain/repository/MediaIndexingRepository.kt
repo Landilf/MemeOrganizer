@@ -14,8 +14,23 @@ interface MediaIndexingRepository {
     /** Re-enqueues items that were waiting for a model package to become available. */
     suspend fun resumePending()
 
+    /** Pauses the current queue without losing its pending items. */
+    suspend fun pauseQueue()
+
+    /** Resumes all pending items in the current queue. */
+    suspend fun resumeQueue()
+
     /** Schedules only items whose last background attempt failed. */
     suspend fun retryFailed(): Int
+
+    /** Schedules a fresh attempt for one failed meme. */
+    suspend fun retryFailed(memeId: Long): Boolean
+
+    /** Returns the latest technical error recorded for a failed meme. */
+    suspend fun failureReason(memeId: Long): String?
+
+    /** Marks a meme as failed for the debug-only UI test tool. */
+    suspend fun simulateFailureForDebug(memeId: Long)
 
     /** Schedules every meme in the library for a new background processing pass. */
     suspend fun reprocessAll(): Int
@@ -25,4 +40,7 @@ interface MediaIndexingRepository {
 
     /** Observes the current and recent background-processing runs. */
     fun observeRuns(): Flow<List<MediaIndexingRun>>
+
+    /** Whether scheduling is currently paused by the user. */
+    fun observeQueuePaused(): Flow<Boolean>
 }

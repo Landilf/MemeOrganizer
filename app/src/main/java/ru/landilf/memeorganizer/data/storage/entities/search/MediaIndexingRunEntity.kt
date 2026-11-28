@@ -1,6 +1,7 @@
 package ru.landilf.memeorganizer.data.storage.entities.search
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -15,5 +16,7 @@ data class MediaIndexingRunEntity(
     val completedCount: Int = 0,
     val failedCount: Int = 0,
     val totalDurationMillis: Long = 0,
-    val finishedAtMillis: Long? = null
+    val finishedAtMillis: Long? = null,
+    val pausedAtMillis: Long? = null,
+    @ColumnInfo(defaultValue = "0") val totalPausedDurationMillis: Long = 0
 )

@@ -48,6 +48,11 @@ data class EditState(
     val error: Boolean = false
 )
 
+data class IndexingFailureState(
+    val memeId: Long,
+    val reason: String
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
@@ -86,10 +91,14 @@ class LibraryViewModel @Inject constructor(
     val indexingProgress = indexingRuns.map { runs ->
         MediaIndexingProgress.from(runs.filter { it.isActive })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val indexingQueuePaused = mediaIndexingRepository.observeQueuePaused()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     private val _manualIndexingInProgress = MutableStateFlow(false)
     val manualIndexingInProgress = _manualIndexingInProgress.asStateFlow()
     private val _edit = MutableStateFlow<EditState?>(null)
     val edit = _edit.asStateFlow()
+    private val _indexingFailure = MutableStateFlow<IndexingFailureState?>(null)
+    val indexingFailure = _indexingFailure.asStateFlow()
     private val _deleteError = MutableStateFlow(false)
     val deleteError = _deleteError.asStateFlow()
     private val _albumCreationError = MutableStateFlow<AlbumNameError?>(null)
@@ -174,6 +183,38 @@ class LibraryViewModel @Inject constructor(
                 AppLogger.app { "media_indexing.manual_schedule.failed type=${error.javaClass.simpleName}" }
             } finally {
                 _manualIndexingInProgress.value = false
+            }
+        }
+    }
+
+    fun pauseIndexingQueue() {
+        viewModelScope.launch {
+            mediaIndexingRepository.pauseQueue()
+        }
+    }
+
+    fun resumeIndexingQueue() {
+        viewModelScope.launch {
+            mediaIndexingRepository.resumeQueue()
+        }
+    }
+
+    fun openIndexingFailure(memeId: Long) {
+        viewModelScope.launch {
+            val reason = mediaIndexingRepository.failureReason(memeId) ?: return@launch
+            _indexingFailure.value = IndexingFailureState(memeId, reason)
+        }
+    }
+
+    fun dismissIndexingFailure() {
+        _indexingFailure.value = null
+    }
+
+    fun retryIndexingFailure() {
+        val failure = _indexingFailure.value ?: return
+        viewModelScope.launch {
+            if (mediaIndexingRepository.retryFailed(failure.memeId)) {
+                _indexingFailure.value = null
             }
         }
     }

@@ -52,6 +52,7 @@ fun AlbumContentsScreen(
     indexingStatuses: Map<Long, MediaIndexingStatus>,
     onBack: () -> Unit,
     onMemeClick: (Meme) -> Unit,
+    onIndexingFailure: (Long) -> Unit = {},
     onRemoveMemes: ((Set<Long>) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -138,7 +139,14 @@ fun AlbumContentsScreen(
                         )
                         MediaIndexingBadge(
                             status = indexingStatuses[meme.id],
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp)
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp),
+                            onClick = if (
+                                indexingStatuses[meme.id] == MediaIndexingStatus.Failed
+                            ) {
+                                { onIndexingFailure(meme.id) }
+                            } else {
+                                null
+                            }
                         )
                         if (meme.id in selected) {
                             Checkbox(

@@ -211,9 +211,13 @@ fun AppRoot(sharedMediaSources: Flow<List<String>> = kotlinx.coroutines.flow.emp
                 val libraryViewModel: LibraryViewModel = hiltViewModel()
                 val runs by libraryViewModel.indexingRuns.collectAsStateWithLifecycle()
                 val progress by libraryViewModel.indexingProgress.collectAsStateWithLifecycle()
+                val queuePaused by libraryViewModel.indexingQueuePaused.collectAsStateWithLifecycle()
                 IndexingHistoryScreen(
                     progress = progress,
                     runs = runs,
+                    queuePaused = queuePaused,
+                    onPauseQueue = libraryViewModel::pauseIndexingQueue,
+                    onResumeQueue = libraryViewModel::resumeIndexingQueue,
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -495,6 +499,7 @@ private fun MainTabsScreen(
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var manualIndexingOnlyFailed by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val deleteError by libraryViewModel.deleteError.collectAsStateWithLifecycle()
+    val indexingFailure by libraryViewModel.indexingFailure.collectAsStateWithLifecycle()
     val albumCreationError by libraryViewModel.albumCreationError.collectAsStateWithLifecycle()
     val albumRenameError by libraryViewModel.albumRenameError.collectAsStateWithLifecycle()
     val albumMemes by libraryViewModel.albumMemes.collectAsStateWithLifecycle()
@@ -531,6 +536,25 @@ private fun MainTabsScreen(
                 Text(stringResource(R.string.ok_button))
             }
         })
+    indexingFailure?.let { failure ->
+        AlertDialog(
+            onDismissRequest = libraryViewModel::dismissIndexingFailure,
+            title = { Text(stringResource(R.string.indexing_failure_title)) },
+            text = {
+                Text(stringResource(R.string.indexing_failure_message, failure.reason))
+            },
+            confirmButton = {
+                TextButton(onClick = libraryViewModel::retryIndexingFailure) {
+                    Text(stringResource(R.string.indexing_failure_retry))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = libraryViewModel::dismissIndexingFailure) {
+                    Text(stringResource(R.string.cancel_button))
+                }
+            }
+        )
+    }
     if (openedId != null) {
         LaunchedEffect(openedId) { snackbar.currentSnackbarData?.dismiss() }
         val viewerMemes = when {
@@ -563,6 +587,7 @@ private fun MainTabsScreen(
                 openedFromFavorites = false
                 openedId = meme.id
             },
+            onIndexingFailure = libraryViewModel::openIndexingFailure,
             onRemoveMemes = { memeIds ->
                 libraryViewModel.removeMemesFromAlbum(openedAlbum.id, memeIds)
             }
@@ -582,7 +607,8 @@ private fun MainTabsScreen(
                 openedFromAlbum = false
                 openedFromFavorites = false
                 openedId = meme.id
-            }
+            },
+            onIndexingFailure = libraryViewModel::openIndexingFailure
         )
         return
     }
@@ -1063,7 +1089,14 @@ private fun MainTabsScreen(
                             )
                             MediaIndexingBadge(
                                 status = indexingStatuses[meme.id],
-                                modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp)
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(4.dp),
+                                onClick = if (
+                                    indexingStatuses[meme.id] == MediaIndexingStatus.Failed
+                                ) {
+                                    { libraryViewModel.openIndexingFailure(meme.id) }
+                                } else {
+                                    null
+                                }
                             )
                             if (meme.id in selected) Checkbox(
                                 true,

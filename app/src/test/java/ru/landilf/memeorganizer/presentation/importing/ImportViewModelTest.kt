@@ -47,10 +47,16 @@ class ImportViewModelTest {
         override suspend fun enqueue(memeId: Long) = Unit
         override suspend fun enqueueAll(memeIds: List<Long>) = memeIds.size
         override suspend fun resumePending() = Unit
+        override suspend fun pauseQueue() = Unit
+        override suspend fun resumeQueue() = Unit
         override suspend fun retryFailed() = 0
+        override suspend fun retryFailed(memeId: Long) = false
+        override suspend fun failureReason(memeId: Long): String? = null
+        override suspend fun simulateFailureForDebug(memeId: Long) = Unit
         override suspend fun reprocessAll() = 0
         override fun observeStatuses() = flowOf(emptyMap<Long, MediaIndexingStatus>())
         override fun observeRuns() = flowOf(emptyList<MediaIndexingRun>())
+        override fun observeQueuePaused() = flowOf(false)
     }
 
     private fun createViewModel(savedState: SavedStateHandle) = ImportViewModel(

@@ -19,6 +19,8 @@ import ru.landilf.memeorganizer.data.storage.dao.MemeDao
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
 
+private const val MAX_FAILURE_MESSAGE_LENGTH = 200
+
 class MediaIndexingWorker(
     appContext: Context,
     params: WorkerParameters
@@ -34,12 +36,14 @@ class MediaIndexingWorker(
         val memeDao = dependencies.memeDao()
         val indexingDao = dependencies.indexingDao()
         val indexingRunDao = dependencies.indexingRunDao()
+        val queueController = dependencies.queueController()
         if (memeDao.getById(memeId) == null) {
             indexingDao.deleteByMemeId(memeId)
             return Result.success()
         }
         val current = indexingDao.getByMemeId(memeId) ?: return Result.success()
         if (current.runId != runId) return Result.success()
+        if (queueController.isPaused()) return Result.success()
         if (dependencies.modelInstaller().activePackage() == null) {
             AppLogger.ml { "media_indexing.waiting_for_model meme_id=$memeId" }
             return Result.success()
@@ -81,22 +85,30 @@ class MediaIndexingWorker(
             dependencies.indexingNotifier().completed()
             Result.success()
         } catch (error: CancellationException) {
-            if (
-                indexingDao.getByMemeId(memeId)?.runId == runId &&
-                dependencies.batteryStateChecker().needsHeavyWorkConfirmation()
-            ) {
+            val isCurrentRun = indexingDao.getByMemeId(memeId)?.runId == runId
+            val waitingReason = when {
+                queueController.isPaused() -> MediaIndexingRepositoryImpl.PAUSED_REASON
+                dependencies.batteryStateChecker().needsHeavyWorkConfirmation() -> {
+                    MediaIndexingRepositoryImpl.BATTERY_LOW_REASON
+                }
+
+                else -> null
+            }
+            if (isCurrentRun && waitingReason != null) {
                 withContext<Unit>(NonCancellable) {
                     indexingDao.upsert(
                         current.copy(
                             status = MediaIndexingStatus.Pending.storageValue,
                             attemptCount = runAttemptCount,
-                            lastError = MediaIndexingRepositoryImpl.BATTERY_LOW_REASON,
+                            lastError = waitingReason,
                             updatedAtMillis = System.currentTimeMillis(),
                             processingStartedAtMillis = null
                         )
                     )
                 }
-                dependencies.indexingNotifier().waitingForBattery()
+                if (waitingReason == MediaIndexingRepositoryImpl.BATTERY_LOW_REASON) {
+                    dependencies.indexingNotifier().waitingForBattery()
+                }
             }
             throw error
         } catch (error: Exception) {
@@ -112,7 +124,7 @@ class MediaIndexingWorker(
                         MediaIndexingStatus.Pending.storageValue
                     },
                     attemptCount = attempts,
-                    lastError = error.javaClass.simpleName,
+                    lastError = error.toFailureReason(),
                     updatedAtMillis = finishedAtMillis,
                     processingStartedAtMillis = null
                 )
@@ -143,6 +155,14 @@ class MediaIndexingWorker(
     }
 }
 
+private fun Throwable.toFailureReason(): String = buildString {
+    append(javaClass.simpleName)
+    message?.take(MAX_FAILURE_MESSAGE_LENGTH)?.takeIf(String::isNotBlank)?.let { detail ->
+        append(": ")
+        append(detail)
+    }
+}
+
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface MediaIndexingWorkerEntryPoint {
@@ -153,4 +173,5 @@ interface MediaIndexingWorkerEntryPoint {
     fun searchRepository(): MemeSearchRepository
     fun batteryStateChecker(): BatteryStateChecker
     fun indexingNotifier(): IndexingNotifier
+    fun queueController(): IndexingQueueController
 }

@@ -44,4 +44,24 @@ class MediaIndexingProgressTest {
     fun returnsNullWithoutActiveRuns() {
         assertNull(MediaIndexingProgress.from(emptyList()))
     }
+
+    @Test
+    fun excludesPausedTimeFromElapsedDuration() {
+        val run = MediaIndexingRun(
+            id = 1,
+            startedAtMillis = 1_000,
+            totalCount = 1,
+            completedCount = 0,
+            failedCount = 0,
+            totalDurationMillis = 0,
+            finishedAtMillis = null,
+            pausedAtMillis = 4_000,
+            totalPausedDurationMillis = 500
+        )
+
+        assertEquals(2_500L, run.elapsedMillis(8_000))
+        val progress = requireNotNull(MediaIndexingProgress.from(listOf(run)))
+        assertEquals(2_500L, progress.elapsedMillis(8_000))
+        assertEquals(true, progress.isPaused)
+    }
 }

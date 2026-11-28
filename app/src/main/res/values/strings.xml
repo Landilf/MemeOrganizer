@@ -47,6 +47,12 @@
     <string name="indexing_progress_remaining">Осталось примерно: %1$s</string>
     <string name="indexing_progress_estimating">Оценка времени появится после первой завершённой задачи.</string>
     <string name="indexing_progress_failed">Ошибок: %1$d</string>
+    <string name="indexing_progress_paused">Обработка приостановлена.</string>
+    <string name="indexing_pause">Приостановить</string>
+    <string name="indexing_resume">Продолжить</string>
+    <string name="indexing_failure_title">Ошибка обработки</string>
+    <string name="indexing_failure_message">Последняя причина: %1$s</string>
+    <string name="indexing_failure_retry">Повторить</string>
     <string name="indexing_history_running">Выполняется</string>
     <string name="indexing_history_completed">Завершено</string>
     <string name="indexing_history_started">Начало: %1$s</string>
@@ -217,6 +223,12 @@
     <string name="developer_fusion_smoke_success">Fusion-модель прошла Smoke Test Pack.</string>
     <string name="developer_fusion_smoke_unavailable">Установите мультимодальный пакет модели, чтобы выполнить проверку.</string>
     <string name="developer_fusion_smoke_error">Fusion-модель не прошла проверку.</string>
+    <string name="developer_simulate_failure">Симулировать ошибку индексации</string>
+    <string name="developer_simulate_failure_title">Выберите мем</string>
+    <string name="developer_simulate_failure_empty">В библиотеке нет мемов.</string>
+    <string name="developer_simulate_failure_running">Создание тестовой ошибки…</string>
+    <string name="developer_simulate_failure_success">Тестовая ошибка индексации создана.</string>
+    <string name="developer_simulate_failure_error">Не удалось создать тестовую ошибку.</string>
     <string name="indexing_notification_channel_name">Обработка мемов</string>
     <string name="indexing_notification_waiting_title">Обработка отложена</string>
     <string name="indexing_notification_waiting_message">Задача продолжится, когда заряд батареи будет достаточным.</string>

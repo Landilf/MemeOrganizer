@@ -8,7 +8,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -36,6 +39,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.landilf.memeorganizer.R
+import ru.landilf.memeorganizer.BuildConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,9 +47,11 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val status by viewModel.status.collectAsStateWithLifecycle()
     val reindexedCount by viewModel.reindexedCount.collectAsStateWithLifecycle()
+    val memes by viewModel.memes.collectAsStateWithLifecycle()
     val lowBatteryConfirmationRequired by viewModel.lowBatteryConfirmationRequired.collectAsStateWithLifecycle()
     var includeMedia by rememberSaveable { mutableStateOf(true) }
     var clearConfirmationVisible by rememberSaveable { mutableStateOf(false) }
+    var failurePickerVisible by rememberSaveable { mutableStateOf(false) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { viewModel.requestReindexAll() }
@@ -101,6 +107,40 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 dismissButton = {
                     TextButton(onClick = viewModel::dismissLowBatteryConfirmation) {
                         Text(stringResource(R.string.no_button))
+                    }
+                }
+            )
+        }
+        if (failurePickerVisible) {
+            AlertDialog(
+                onDismissRequest = { failurePickerVisible = false },
+                title = { Text(stringResource(R.string.developer_simulate_failure_title)) },
+                text = {
+                    if (memes.isEmpty()) {
+                        Text(stringResource(R.string.developer_simulate_failure_empty))
+                    } else {
+                        Column(
+                            modifier = Modifier.heightIn(max = 360.dp).verticalScroll(
+                                rememberScrollState()
+                            )
+                        ) {
+                            memes.forEach { meme ->
+                                TextButton(
+                                    onClick = {
+                                        failurePickerVisible = false
+                                        viewModel.simulateIndexingFailure(meme.id)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(meme.fileName, modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { failurePickerVisible = false }) {
+                        Text(stringResource(R.string.cancel_button))
                     }
                 }
             )
@@ -165,6 +205,13 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
                 enabled = !status.isBusy(),
                 modifier = Modifier.padding(top = 12.dp)
             ) { Text(stringResource(R.string.developer_fusion_smoke_test)) }
+            if (BuildConfig.DEBUG) {
+                OutlinedButton(
+                    onClick = { failurePickerVisible = true },
+                    enabled = !status.isBusy() && memes.isNotEmpty(),
+                    modifier = Modifier.padding(top = 12.dp)
+                ) { Text(stringResource(R.string.developer_simulate_failure)) }
+            }
             when (status) {
                 DebugExportStatus.Exporting, DebugExportStatus.Clearing -> LinearProgressIndicator(
                     Modifier.fillMaxWidth().padding(top = 16.dp)
@@ -174,6 +221,10 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
 
                 DebugExportStatus.TestingFusion -> DeveloperProgress(
                     R.string.developer_fusion_smoke_testing
+                )
+
+                DebugExportStatus.SimulatingIndexingFailure -> DeveloperProgress(
+                    R.string.developer_simulate_failure_running
                 )
 
                 DebugExportStatus.ExportSuccess -> Text(
@@ -225,6 +276,16 @@ fun DeveloperScreen(viewModel: DeveloperViewModel, onBack: () -> Unit) {
 
                 DebugExportStatus.FusionTestError -> Text(
                     stringResource(R.string.developer_fusion_smoke_error),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DebugExportStatus.SimulatedIndexingFailure -> Text(
+                    stringResource(R.string.developer_simulate_failure_success),
+                    Modifier.padding(top = 16.dp)
+                )
+
+                DebugExportStatus.SimulatedIndexingFailureError -> Text(
+                    stringResource(R.string.developer_simulate_failure_error),
                     Modifier.padding(top = 16.dp)
                 )
 

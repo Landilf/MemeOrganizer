@@ -4,6 +4,15 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 object DatabaseMigrations {
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `media_indexing_runs` ADD COLUMN `pausedAtMillis` INTEGER")
+            db.execSQL(
+                "ALTER TABLE `media_indexing_runs` ADD COLUMN `totalPausedDurationMillis` INTEGER NOT NULL DEFAULT 0"
+            )
+        }
+    }
+
     val MIGRATION_11_12 = object : Migration(11, 12) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE `media_indexing` ADD COLUMN `runId` INTEGER")

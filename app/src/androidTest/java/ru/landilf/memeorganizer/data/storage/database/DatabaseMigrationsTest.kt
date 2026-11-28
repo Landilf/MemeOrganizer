@@ -85,7 +85,8 @@ class DatabaseMigrationsTest {
                     DatabaseMigrations.MIGRATION_8_9,
                     DatabaseMigrations.MIGRATION_9_10,
                     DatabaseMigrations.MIGRATION_10_11,
-                    DatabaseMigrations.MIGRATION_11_12
+                    DatabaseMigrations.MIGRATION_11_12,
+                    DatabaseMigrations.MIGRATION_12_13
                 )
                 .build()
             try {
@@ -287,6 +288,21 @@ class DatabaseMigrationsTest {
                 database.query("SELECT COUNT(*) FROM media_indexing_runs").use { cursor ->
                     assertTrue(cursor.moveToFirst())
                     assertEquals(0, cursor.getInt(0))
+                }
+            }
+    }
+
+    @Test
+    fun migratesVersion12AndAddsPauseAccountingToIndexingRuns() {
+        helper.createDatabase(databaseName, 12).close()
+        helper.runMigrationsAndValidate(databaseName, 13, true, DatabaseMigrations.MIGRATION_12_13)
+            .use { database ->
+                database.query("PRAGMA table_info(media_indexing_runs)").use { cursor ->
+                    val names = buildSet {
+                        while (cursor.moveToNext()) add(cursor.getString(1))
+                    }
+                    assertTrue("pausedAtMillis" in names)
+                    assertTrue("totalPausedDurationMillis" in names)
                 }
             }
     }

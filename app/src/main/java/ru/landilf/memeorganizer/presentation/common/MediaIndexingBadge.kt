@@ -1,6 +1,7 @@
 package ru.landilf.memeorganizer.presentation.common
 
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -20,7 +21,11 @@ import ru.landilf.memeorganizer.R
 import ru.landilf.memeorganizer.domain.model.ml.MediaIndexingStatus
 
 @Composable
-fun MediaIndexingBadge(status: MediaIndexingStatus?, modifier: Modifier = Modifier) {
+fun MediaIndexingBadge(
+    status: MediaIndexingStatus?,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
     val appearance = when (status) {
         MediaIndexingStatus.Pending -> IndexingBadgeAppearance(
             label = R.string.indexing_status_pending,
@@ -54,7 +59,9 @@ fun MediaIndexingBadge(status: MediaIndexingStatus?, modifier: Modifier = Modifi
     } ?: return
 
     Surface(
-        modifier = modifier,
+        modifier = modifier.then(
+            if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
+        ),
         color = appearance.containerColor,
         contentColor = appearance.contentColor,
         shape = MaterialTheme.shapes.small

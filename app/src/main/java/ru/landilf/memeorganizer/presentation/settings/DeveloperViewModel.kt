@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.landilf.memeorganizer.core.logging.AppLogger
@@ -16,7 +18,9 @@ import ru.landilf.memeorganizer.data.ml.FusionSmokeTestResult
 import ru.landilf.memeorganizer.data.ml.FusionSmokeTestRunner
 import ru.landilf.memeorganizer.data.ml.LocalModelInstaller
 import ru.landilf.memeorganizer.data.indexing.IndexingNotifier
+import ru.landilf.memeorganizer.domain.repository.MediaIndexingRepository
 import ru.landilf.memeorganizer.domain.repository.MemeSearchRepository
+import ru.landilf.memeorganizer.domain.usecase.meme.ObserveMemesUseCase
 import javax.inject.Inject
 
 enum class DebugExportStatus {
@@ -34,7 +38,10 @@ enum class DebugExportStatus {
     TestingFusion,
     FusionTestSuccess,
     FusionTestUnavailable,
-    FusionTestError
+    FusionTestError,
+    SimulatingIndexingFailure,
+    SimulatedIndexingFailure,
+    SimulatedIndexingFailureError
 }
 
 @HiltViewModel
@@ -44,7 +51,9 @@ class DeveloperViewModel @Inject constructor(
     private val modelInstaller: LocalModelInstaller,
     private val fusionSmokeTestRunner: FusionSmokeTestRunner,
     private val batteryStateChecker: BatteryStateChecker,
-    private val indexingNotifier: IndexingNotifier
+    private val indexingNotifier: IndexingNotifier,
+    observeMemes: ObserveMemesUseCase,
+    private val mediaIndexingRepository: MediaIndexingRepository
 ) : ViewModel() {
     private val _status = MutableStateFlow(DebugExportStatus.Idle)
     val status = _status.asStateFlow()
@@ -52,6 +61,12 @@ class DeveloperViewModel @Inject constructor(
     val reindexedCount = _reindexedCount.asStateFlow()
     private val _lowBatteryConfirmationRequired = MutableStateFlow(false)
     val lowBatteryConfirmationRequired = _lowBatteryConfirmationRequired.asStateFlow()
+    val memes = observeMemes()
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            emptyList()
+        )
 
     fun export(destination: Uri, includeMedia: Boolean) {
         if (_status.value.isBusy()) return
@@ -158,11 +173,28 @@ class DeveloperViewModel @Inject constructor(
             }
         }
     }
+
+    fun simulateIndexingFailure(memeId: Long) {
+        if (_status.value.isBusy()) return
+        _status.value = DebugExportStatus.SimulatingIndexingFailure
+        viewModelScope.launch {
+            try {
+                mediaIndexingRepository.simulateFailureForDebug(memeId)
+                _status.value = DebugExportStatus.SimulatedIndexingFailure
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppLogger.app { "debug.indexing_failure_simulation.failed type=${error.javaClass.simpleName}" }
+                _status.value = DebugExportStatus.SimulatedIndexingFailureError
+            }
+        }
+    }
 }
 
 internal fun DebugExportStatus.isBusy(): Boolean = this in setOf(
     DebugExportStatus.Exporting,
     DebugExportStatus.Clearing,
     DebugExportStatus.Reindexing,
-    DebugExportStatus.TestingFusion
+    DebugExportStatus.TestingFusion,
+    DebugExportStatus.SimulatingIndexingFailure
 )

@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -36,6 +37,9 @@ import java.util.Date
 fun IndexingHistoryScreen(
     progress: MediaIndexingProgress?,
     runs: List<MediaIndexingRun>,
+    queuePaused: Boolean,
+    onPauseQueue: () -> Unit,
+    onResumeQueue: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -72,6 +76,9 @@ fun IndexingHistoryScreen(
                     item {
                         IndexingProgressCard(
                             progress = current,
+                            queuePaused = queuePaused,
+                            onPauseQueue = onPauseQueue,
+                            onResumeQueue = onResumeQueue,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }
@@ -88,7 +95,13 @@ fun IndexingHistoryScreen(
 }
 
 @Composable
-fun IndexingProgressCard(progress: MediaIndexingProgress, modifier: Modifier = Modifier) {
+fun IndexingProgressCard(
+    progress: MediaIndexingProgress,
+    queuePaused: Boolean,
+    onPauseQueue: () -> Unit,
+    onResumeQueue: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val now by produceState(System.currentTimeMillis(), progress) {
         while (true) {
             value = System.currentTimeMillis()
@@ -115,14 +128,18 @@ fun IndexingProgressCard(progress: MediaIndexingProgress, modifier: Modifier = M
             Text(
                 stringResource(
                     R.string.indexing_progress_elapsed,
-                    formatDuration(now - progress.startedAtMillis)
+                    formatDuration(progress.elapsedMillis(now))
                 ),
                 style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = progress.estimatedRemainingMillis?.let { remaining ->
-                    stringResource(R.string.indexing_progress_remaining, formatDuration(remaining))
-                } ?: stringResource(R.string.indexing_progress_estimating),
+                text = if (queuePaused) {
+                    stringResource(R.string.indexing_progress_paused)
+                } else {
+                    progress.estimatedRemainingMillis?.let { remaining ->
+                        stringResource(R.string.indexing_progress_remaining, formatDuration(remaining))
+                    } ?: stringResource(R.string.indexing_progress_estimating)
+                },
                 style = MaterialTheme.typography.bodyMedium
             )
             if (progress.failedCount > 0) {
@@ -130,6 +147,16 @@ fun IndexingProgressCard(progress: MediaIndexingProgress, modifier: Modifier = M
                     stringResource(R.string.indexing_progress_failed, progress.failedCount),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            OutlinedButton(
+                onClick = if (queuePaused) onResumeQueue else onPauseQueue,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    stringResource(
+                        if (queuePaused) R.string.indexing_resume else R.string.indexing_pause
+                    )
                 )
             }
         }
@@ -177,7 +204,7 @@ private fun IndexingRunCard(run: MediaIndexingRun, modifier: Modifier = Modifier
             Text(
                 stringResource(
                     R.string.indexing_history_duration,
-                    formatDuration(endedAtMillis - run.startedAtMillis)
+                    formatDuration(run.elapsedMillis(endedAtMillis))
                 ),
                 style = MaterialTheme.typography.bodyMedium
             )
